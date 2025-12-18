@@ -38,18 +38,18 @@ export function ResearchPage() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-semibold text-gray-900">Research Job</h2>
           <p className="text-sm text-gray-500 mt-1">ID: {job.id}</p>
         </div>
         <Badge variant={getStatusBadgeVariant(job.status)}>{job.status}</Badge>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-[calc(100vh-200px)]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[calc(100vh-220px)]">
         <ResearchLog logs={job.logs} />
         <ResearchResult result={job.result || ''} />
       </div>
-      <div className="mt-4 text-center">
+      <div className="mt-6 text-center">
         {(job.status === 'completed' || job.status === 'failed') && (
           <Button onClick={() => navigate('/')}>Start New Research</Button>
         )}

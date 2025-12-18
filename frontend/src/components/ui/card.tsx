@@ -7,7 +7,7 @@ interface CardProps {
 
 export const Card: React.FC<CardProps> = ({ children, className }) => {
   return (
-    <div className={`bg-white text-gray-900 border border-gray-200 rounded-lg shadow-lg p-4 ${className}`}>
+    <div className={`bg-white text-gray-900 border border-gray-200 rounded-lg shadow-lg ${className}`}>
       {children}
     </div>
   );

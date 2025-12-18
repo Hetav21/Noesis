@@ -29,14 +29,14 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs }) => {
   };
 
   return (
-    <Card className='h-full flex flex-col'>
+    <Card className='h-full flex flex-col p-6'>
       <h3 className='text-xl font-semibold mb-4 text-gray-900'>Research Log</h3>
-      <div className='flex-grow overflow-y-auto space-y-2 p-2 bg-gray-100 rounded-md'>
+      <div className='flex-grow overflow-y-auto space-y-2 p-4 bg-gray-100 rounded-md'>
         {logs.length === 0 ? (
           <p className='text-gray-500'>No logs yet. Start a research job to see updates.</p>
         ) : (
           logs.map((log, index) => (
-            <div key={index} className='text-sm text-gray-700 flex items-start space-x-2'>
+            <div key={index} className='text-sm text-gray-700 flex items-start gap-3 py-1.5 px-2 bg-white rounded border border-gray-200'>
               <Badge variant={getBadgeVariant(log.level)} className='flex-shrink-0 mt-0.5'>
                 {new Date(log.timestamp).toLocaleTimeString()}
               </Badge>

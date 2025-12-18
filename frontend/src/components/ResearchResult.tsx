@@ -8,9 +8,9 @@ interface ResearchResultProps {
 
 export const ResearchResult: React.FC<ResearchResultProps> = ({ result }) => {
   return (
-    <Card className='h-full flex flex-col'>
+    <Card className='h-full flex flex-col p-6'>
       <h3 className='text-xl font-semibold mb-4 text-gray-900'>Research Result</h3>
-      <div className='flex-grow overflow-y-auto p-2 bg-gray-100 rounded-md prose max-w-none'>
+      <div className='flex-grow overflow-y-auto p-4 bg-gray-100 rounded-md prose max-w-none'>
         {result ? (
           <ReactMarkdown>{result}</ReactMarkdown>
         ) : (
