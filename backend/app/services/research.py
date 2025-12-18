@@ -100,20 +100,30 @@ class ResearchWorkflow:
         try:
             results = DDGS().text(
                 query,
-                region="us-en",
-                safesearch="on",
-                timelimit="y",
+                region="wt-wt",
+                safesearch="moderate",
                 max_results=self.max_results_per_query,
             )
-            return results
+            filtered_results = [
+                r
+                for r in results
+                if not any(
+                    domain in r.get("href", "")
+                    for domain in [
+                        "zhidao.baidu.com",
+                        "zhihu.com",
+                        "baidu.com",
+                        "symbolab.com",
+                        "wordreference.com",
+                    ]
+                )
+            ]
+            return (
+                filtered_results
+                if filtered_results
+                else results[: self.max_results_per_query]
+            )
         except Exception as ex:
-            # Using log_callback for errors
-            # Note: log_callback is async, but this method is not.
-            # In a real scenario, you might want to make duckduckgo_search async
-            # or handle this error logging differently if it needs to be awaited.
-            # For now, we'll call it directly, assuming it can be called synchronously
-            # or that the async call will be handled by the event loop if it's a coroutine.
-            # For this exercise, I'll assume direct call is acceptable or will be awaited implicitly.
             self.log_callback({"type": "error", "message": f"Search error: {str(ex)}"})
             return []
 
