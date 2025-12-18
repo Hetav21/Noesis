@@ -31,7 +31,7 @@ async def startup_event():
     await init_db()
 
 
-async def run_research_task(job_id: str, query: str):
+async def run_research_task(job_id: str, query: str, depth: int, breadth: int):
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as db:
         try:
@@ -65,7 +65,9 @@ async def run_research_task(job_id: str, query: str):
                     job.logs = logs
                     await db.commit()
 
-            workflow = ResearchWorkflow(query=query, log_callback=log_callback)
+            workflow = ResearchWorkflow(
+                query=query, log_callback=log_callback, depth=depth, breadth=breadth
+            )
             final_result = await workflow.research()
 
             result = await db.execute(
@@ -123,7 +125,9 @@ async def create_research_job(
     if job_id is None:
         raise HTTPException(status_code=500, detail="Failed to create job")
 
-    background_tasks.add_task(run_research_task, job_id, db_job.query)
+    background_tasks.add_task(
+        run_research_task, job_id, db_job.query, db_job.depth, db_job.breadth
+    )
 
     return ResearchJobRead(
         id=job_id,
