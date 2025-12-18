@@ -102,22 +102,32 @@ class ResearchWorkflow:
                 query,
                 region="in-en",
                 safesearch="moderate",
-                max_results=self.max_results_per_query,
+                max_results=self.max_results_per_query * 3,
             )
-            filtered_results = [
-                r
-                for r in results
-                if not any(
-                    domain in r.get("href", "")
-                    for domain in [
-                        "zhidao.baidu.com",
-                        "zhihu.com",
-                        "baidu.com",
-                        "symbolab.com",
-                        "wordreference.com",
-                    ]
-                )
+            blocked_domains = [
+                "baidu.com",
+                "zhihu.com",
+                "zhidao.baidu.com",
+                "jingyan.baidu.com",
+                "symbolab.com",
+                "wordreference.com",
+                "cpsenglish.com",
+                "ell.stackexchange.com",
+                "forum.wordreference.com",
             ]
+            blocked_tlds = [".cn", ".jp", ".kr", ".ru"]
+
+            filtered_results = []
+            for r in results:
+                url = r.get("href", "").lower()
+                if any(domain in url for domain in blocked_domains):
+                    continue
+                if any(url.endswith(tld) or f"{tld}/" in url for tld in blocked_tlds):
+                    continue
+                filtered_results.append(r)
+                if len(filtered_results) >= self.max_results_per_query:
+                    break
+
             return (
                 filtered_results
                 if filtered_results
