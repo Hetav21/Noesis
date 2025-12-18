@@ -1,7 +1,7 @@
 import time
 from typing import Callable, Any
 from pydantic import BaseModel
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 # Assuming these are available in the backend.app.agents package
 from agents import Runner, trace
