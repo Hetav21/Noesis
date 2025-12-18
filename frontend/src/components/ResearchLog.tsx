@@ -36,7 +36,7 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs }) => {
           <p className='text-gray-500'>No logs yet. Start a research job to see updates.</p>
         ) : (
           logs.map((log, index) => (
-            <div key={index} className='text-sm text-gray-700 flex items-start gap-3 py-1.5 px-2 bg-white rounded border border-gray-200'>
+            <div key={index} className='text-sm text-gray-700 flex items-start gap-3 py-1.5 px-2 bg-white rounded'>
               <Badge variant={getBadgeVariant(log.level)} className='flex-shrink-0 mt-0.5'>
                 {new Date(log.timestamp).toLocaleTimeString()}
               </Badge>
