@@ -100,7 +100,7 @@ class ResearchWorkflow:
         try:
             results = DDGS().text(
                 query,
-                region="wt-wt",
+                region="in-en",
                 safesearch="moderate",
                 max_results=self.max_results_per_query,
             )
