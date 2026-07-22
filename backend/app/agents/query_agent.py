@@ -1,5 +1,6 @@
 from agents import Agent
 from pydantic import BaseModel
+from app.config import get_agent_settings
 
 
 QUERY_AGENT_PROMPT = """You are a helpful assistant that can generate search queries for research.
@@ -21,8 +22,6 @@ Always provide both your thinking process and the generated queries.
 class QueryResponse(BaseModel):
     queries: list[str]
     thoughts: str
-
-from app.config import get_agent_settings
 
 model, settings = get_agent_settings("QUERY_AGENT", "gpt-4o-mini")
 

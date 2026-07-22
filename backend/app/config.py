@@ -1,9 +1,33 @@
+import logging
 import os
 from dotenv import load_dotenv
 from agents import ModelSettings
 
 # Load environment variables on startup
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+
+def to_float(val: str | None) -> float | None:
+    if val is None or val.strip() == "":
+        return None
+    try:
+        return float(val)
+    except ValueError as e:
+        logger.warning(f"Invalid float value '{val}': {e}")
+        return None
+
+
+def to_int(val: str | None) -> int | None:
+    if val is None or val.strip() == "":
+        return None
+    try:
+        return int(val)
+    except ValueError as e:
+        logger.warning(f"Invalid integer value '{val}': {e}")
+        return None
+
 
 def get_agent_settings(prefix: str, default_model: str) -> tuple[str, ModelSettings]:
     """
@@ -18,22 +42,6 @@ def get_agent_settings(prefix: str, default_model: str) -> tuple[str, ModelSetti
     frequency_penalty = os.getenv(f"{prefix}_FREQUENCY_PENALTY")
     top_k = os.getenv(f"{prefix}_TOP_K")
     max_tokens = os.getenv(f"{prefix}_MAX_TOKENS")
-    
-    def to_float(val):
-        if val is None or val.strip() == "":
-            return None
-        try:
-            return float(val)
-        except ValueError:
-            return None
-
-    def to_int(val):
-        if val is None or val.strip() == "":
-            return None
-        try:
-            return int(val)
-        except ValueError:
-            return None
 
     extra_args = {}
     top_k_val = to_int(top_k)

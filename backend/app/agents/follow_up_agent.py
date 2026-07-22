@@ -1,5 +1,6 @@
 from agents import Agent
 from pydantic import BaseModel
+from app.config import get_agent_settings
 
 
 FOLLOW_UP_DECISION_PROMPT = (
@@ -22,8 +23,6 @@ class FollowUpDecisionResponse(BaseModel):
     should_follow_up: bool
     reasoning: str
     queries: list[str]
-
-from app.config import get_agent_settings
 
 model, settings = get_agent_settings("FOLLOW_UP_AGENT", "gpt-4o-mini")
 

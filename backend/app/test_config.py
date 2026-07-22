@@ -35,7 +35,21 @@ def test_config_custom():
     del os.environ["TEST_AGENT_TOP_K"]
     del os.environ["TEST_AGENT_MAX_TOKENS"]
 
+def test_config_invalid():
+    os.environ["TEST_AGENT_TEMPERATURE"] = "not_a_float"
+    os.environ["TEST_AGENT_MAX_TOKENS"] = "not_an_int"
+    
+    model, settings = get_agent_settings("TEST_AGENT", "gpt-default")
+    assert model == "gpt-default"
+    assert settings.temperature is None
+    assert settings.max_tokens is None
+    
+    # Clean up
+    del os.environ["TEST_AGENT_TEMPERATURE"]
+    del os.environ["TEST_AGENT_MAX_TOKENS"]
+
 if __name__ == "__main__":
     test_config_defaults()
     test_config_custom()
+    test_config_invalid()
     print("All config tests passed!")

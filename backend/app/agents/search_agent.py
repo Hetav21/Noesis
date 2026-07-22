@@ -1,6 +1,7 @@
 from agents import Agent, function_tool
 from bs4 import BeautifulSoup
 import requests
+from app.config import get_agent_settings
 
 @function_tool
 def url_scrape(url: str) -> str:
@@ -40,8 +41,6 @@ SEARCH_AGENT_PROMPT = (
     "essence and ignore any fluff. Do not include any additional commentary other than the summary "
     "itself."
 )
-
-from app.config import get_agent_settings
 
 model, settings = get_agent_settings("SEARCH_AGENT", "gpt-4o-mini")
 
