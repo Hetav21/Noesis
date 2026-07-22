@@ -22,9 +22,15 @@ class QueryResponse(BaseModel):
     queries: list[str]
     thoughts: str
 
+from app.config import get_agent_settings
+
+model, settings = get_agent_settings("QUERY_AGENT", "gpt-4o-mini")
+
 query_agent = Agent(
     name="Query Generator Agent",
     instructions=QUERY_AGENT_PROMPT,
     output_type=QueryResponse,
-    model="gpt-4o-mini"
+    model=model,
+    model_settings=settings
 )
+
