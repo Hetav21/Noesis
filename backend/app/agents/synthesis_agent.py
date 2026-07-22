@@ -1,16 +1,10 @@
 from agents import Agent
 from app.config import get_agent_settings
+from pathlib import Path
 
-SYNTHESIS_AGENT_PROMPT = (
-    "You are a research report writer. You will receive an original query followed by multiple summaries "
-    "of web search results. Your task is to create a comprehensive report that addresses the original query "
-    "by combining the information from the search results into a coherent whole. "
-    "The report should be well-structured, informative, and directly answer the original query. "
-    "Focus on providing actionable insights and practical information. "
-    "Aim for up to 5-6 pages with clear sections and a conclusion. "
-    "Important: Use markdown formatting with headings and subheadings. Have a table of contents in the beginning of the report that links to each section."
-    "Try and include in-text citations to the sources used to create the report with a source list at the end of the report."
-)
+PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "synthesis.md"
+with open(PROMPT_PATH, "r", encoding="utf-8") as f:
+    SYNTHESIS_AGENT_PROMPT = f.read()
 
 model, settings = get_agent_settings("SYNTHESIS_AGENT", "gpt-4o")
 

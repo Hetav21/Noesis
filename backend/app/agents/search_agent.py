@@ -32,15 +32,12 @@ def url_scrape(url: str) -> str:
             return response.text[:5000]
     except Exception as e:
         return f"Failed to scrape content from {url}: {str(e)}"
+from pathlib import Path
 
-SEARCH_AGENT_PROMPT = (
-    "You are a research assistant. Given a URL and its title, you will analyze the content of the URL "
-    "and produce a concise summary of the information. The summary must be 2-3 paragraphs."
-    "Capture the main points. Write succinctly, no need to have complete sentences or perfect "
-    "grammar. This will be consumed by someone synthesizing a report, so it's vital you capture the "
-    "essence and ignore any fluff. Do not include any additional commentary other than the summary "
-    "itself."
-)
+PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "search.md"
+with open(PROMPT_PATH, "r", encoding="utf-8") as f:
+    SEARCH_AGENT_PROMPT = f.read()
+
 
 model, settings = get_agent_settings("SEARCH_AGENT", "gpt-4o-mini")
 
