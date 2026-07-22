@@ -16,10 +16,11 @@ A web application that implements an iterative deep research workflow using a mu
 ## 2. Start Commands
 
 ### Prerequisites & Environment Setup
-Ensure you set your OpenAI API key (used by the OpenAI Agents SDK):
+Set up your environment variables by copying the example file:
 ```bash
-export OPENAI_API_KEY="your-openai-api-key"
+cp backend/.env.example backend/.env
 ```
+Edit `backend/.env` to include your `OPENAI_API_KEY`. You can also configure per-agent models and parameters, or override the `OPENAI_BASE_URL` if you are using an alternative provider.
 
 If you use Nix and `direnv`, running the following command in the project root will automatically load the correct versions of Python, Bun, SQLite, UV, and Node:
 ```bash
@@ -73,7 +74,7 @@ graph TD
 ### Backend
 * **FastAPI**: Exposes `/api/research` endpoints for creating and fetching job status/logs.
 * **SQLModel & aiosqlite**: Provides asynchronous SQLite database access for storing and retrieving research job states.
-* **OpenAI Agents SDK**: Orchestrates the agent group (`gpt-4o-mini` by default):
+* **OpenAI Agents SDK**: Orchestrates the agent group (models and parameters are fully configurable in `.env`, defaults to `gpt-4o-mini` and `gpt-4o`):
   * **Query Agent**: Breaks down research goals into targeted search queries.
   * **Search Agent**: Extracts and summarizes content from search results.
   * **Follow-up Agent**: Evaluates if the current findings are sufficient or if more research is required.
