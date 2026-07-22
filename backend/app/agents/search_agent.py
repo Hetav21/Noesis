@@ -41,9 +41,15 @@ SEARCH_AGENT_PROMPT = (
     "itself."
 )
 
+from app.config import get_agent_settings
+
+model, settings = get_agent_settings("SEARCH_AGENT", "gpt-4o-mini")
+
 search_agent = Agent(
     name="Search Agent",
     instructions=SEARCH_AGENT_PROMPT,
     tools=[url_scrape],
-    model="gpt-4o-mini"
+    model=model,
+    model_settings=settings
 )
+
