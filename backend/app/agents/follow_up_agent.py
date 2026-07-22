@@ -23,9 +23,14 @@ class FollowUpDecisionResponse(BaseModel):
     reasoning: str
     queries: list[str]
 
+from app.config import get_agent_settings
+
+model, settings = get_agent_settings("FOLLOW_UP_AGENT", "gpt-4o-mini")
+
 follow_up_decision_agent = Agent(
     name="Follow-up Decision Agent",
     instructions=FOLLOW_UP_DECISION_PROMPT,
     output_type=FollowUpDecisionResponse,
-    model="gpt-4o-mini",
+    model=model,
+    model_settings=settings,
 )
