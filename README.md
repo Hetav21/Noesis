@@ -1,4 +1,4 @@
-# Deep Research Agent V2
+# Deep Research Agent
 
 A web application that implements an iterative deep research workflow using a multi-agent system. It allows users to input a query, specify search depth and breadth, track the agent logs in real time, and view a synthesized final markdown report.
 

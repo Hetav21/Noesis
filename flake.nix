@@ -1,5 +1,5 @@
 {
-  description = "Deep Research Agent V2 Development Environment";
+  description = "Deep Research Agent Development Environment";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -24,7 +24,7 @@
         shellHook = ''
           export PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright-driver.browsers}
           export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-          echo "Deep Research Agent V2 Environment Loaded"
+          echo "Deep Research Agent Environment Loaded"
         '';
       };
     };
