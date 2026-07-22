@@ -1,5 +1,5 @@
 from agents import Agent
-
+from app.config import get_agent_settings
 
 SYNTHESIS_AGENT_PROMPT = (
     "You are a research report writer. You will receive an original query followed by multiple summaries "
@@ -11,8 +11,12 @@ SYNTHESIS_AGENT_PROMPT = (
     "Important: Use markdown formatting with headings and subheadings. Have a table of contents in the beginning of the report that links to each section."
     "Try and include in-text citations to the sources used to create the report with a source list at the end of the report."
 )
+
+model, settings = get_agent_settings("SYNTHESIS_AGENT", "gpt-4o")
+
 synthesis_agent = Agent(
     name="Synthesis Agent",
     instructions=SYNTHESIS_AGENT_PROMPT,
-    model="gpt-4o",
+    model=model,
+    model_settings=settings,
 )
