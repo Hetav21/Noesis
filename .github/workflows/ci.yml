@@ -100,3 +100,18 @@ jobs:
 
       - name: Build production bundle
         run: bun run build
+
+  ci:
+    name: CI
+    needs: [detect-changes, backend, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate status
+        run: |
+          if [ "${{ needs.backend.result }}" = "failure" ] || [ "${{ needs.frontend.result }}" = "failure" ]; then
+            echo "CI checks failed."
+            exit 1
+          fi
+          echo "CI checks succeeded or cleanly skipped."
+
