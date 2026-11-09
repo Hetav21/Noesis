@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlmodel import select
+from sqlalchemy import text
 
 from app.db import async_session, init_db
 from app.main import app
@@ -22,11 +22,26 @@ TEST_SECRET = "test-session-secret-key-32-bytes-long-for-hmac"
 
 @pytest.fixture(autouse=True)
 async def isolate_database():
-    """Ensure PostgreSQL schema and test env variables are set."""
+    """Ensure PostgreSQL schema and test env variables are set, cleaning up test rows after yield."""
     os.environ["TESTING"] = "true"
     os.environ["SESSION_SECRET"] = TEST_SECRET
     await init_db()
     yield
+    # Clean up test-created records during fixture teardown
+    async with async_session() as session:
+        await session.execute(
+            text(
+                "DELETE FROM researchusage WHERE session_id LIKE 'test-%' "
+                "OR client_ip IN ('testclient', '198.51.100.42')"
+            )
+        )
+        await session.execute(
+            text(
+                "DELETE FROM researchjob WHERE query LIKE '%test%' "
+                "OR session_id LIKE 'test-%'"
+            )
+        )
+        await session.commit()
 
 
 def test_session_signing_and_verification():

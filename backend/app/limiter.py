@@ -5,12 +5,13 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import and_, func, select
 
 from app.models import JobStatus, ResearchJob, ResearchUsage
 
-# Global lock to serialize quota checking and job insertion across concurrent requests
+# Global lock to serialize quota checking and job insertion across concurrent in-process requests
 rate_limit_lock = asyncio.Lock()
 
 # In-memory tracking of live running workflows (active until background task completes)
@@ -100,6 +101,12 @@ async def record_research_usage(
         created_at=datetime.now(UTC),
     )
     db.add(usage)
+    # Prune expired usage rows beyond the sliding quota window to prevent unbounded table growth
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    await db.execute(
+        text("DELETE FROM researchusage WHERE created_at < :cutoff"),
+        {"cutoff": cutoff},
+    )
 
 
 async def check_rate_limits(
@@ -120,6 +127,15 @@ async def check_rate_limits(
     Raises:
         HTTPException(429): If either concurrency or hourly limits are breached.
     """
+    bind = db.bind
+    dialect_name = bind.dialect.name if bind else ""
+    if dialect_name == "postgresql":
+        # Acquire transaction-scoped advisory lock for cross-worker serialization
+        await db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+            {"lock_key": f"rate_limit:{session_id}"},
+        )
+
     max_concurrent, hourly_limit = get_rate_limit_settings()
     is_testing = os.getenv("TESTING", "").lower() in ("true", "1")
 

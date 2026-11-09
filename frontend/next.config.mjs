@@ -2,6 +2,7 @@
 const rawBackendUrl =
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:8000";
 
 // Normalize backend URL by removing trailing slashes and trailing /api

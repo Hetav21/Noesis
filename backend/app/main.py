@@ -21,14 +21,15 @@ from app.limiter import (
 )
 from app.models import JobStatus, ResearchJob, ResearchJobCreate, ResearchJobRead
 from app.services.research import ResearchWorkflow
-from app.session import ClientIpDep, SessionIdDep
+from app.session import ClientIpDep, SessionIdDep, get_session_secret
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI lifespan context manager for startup table initialization."""
+    """FastAPI lifespan context manager for startup table initialization and secret validation."""
+    get_session_secret()
     await init_db()
     yield
 
@@ -162,6 +163,7 @@ async def get_suggestions(
             import openai
 
             client = openai.AsyncOpenAI(api_key=api_key)
+            model_name = os.getenv("QUERY_AGENT_MODEL", "gpt-4o-mini")
             try:
                 prompt = (
                     "The user previously researched these topics:\n"
@@ -170,15 +172,19 @@ async def get_suggestions(
                     "Return ONLY a JSON array of 4 strings, no markdown, no commentary."
                 )
                 response = await client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=model_name,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.7,
                 )
                 content = response.choices[0].message.content or "[]"
                 cleaned = content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
                 parsed = json.loads(cleaned)
-                if isinstance(parsed, list) and len(parsed) > 0:
-                    return [str(p) for p in parsed[:4]]
+                if isinstance(parsed, list):
+                    valid_suggestions = [
+                        p.strip() for p in parsed if isinstance(p, str) and p.strip()
+                    ][:4]
+                    if valid_suggestions:
+                        return valid_suggestions
             except Exception as err:  # noqa: BLE001
                 print(f"Suggestions generation fallback note: {err}")
             return default_suggestions
@@ -187,6 +193,11 @@ async def get_suggestions(
         _suggestions_inflight[cache_key] = task
         try:
             generated = await task
+            # Cache successfully generated suggestions for 10 minutes
+            if generated and generated != default_suggestions:
+                _suggestions_cache["key"] = cache_key
+                _suggestions_cache["timestamp"] = time.time()
+                _suggestions_cache["suggestions"] = generated
             return {"suggestions": generated}
         finally:
             _suggestions_inflight.pop(cache_key, None)
@@ -443,13 +454,18 @@ async def claim_legacy_job(
     job_id: str,
     db: SessionDep,
     session_id: SessionIdDep,
+    client_ip: ClientIpDep,
 ):
     """Claim an unassigned legacy research report for the current session.
 
     Enables historical reports created prior to session isolation to be adopted
     and managed by the claiming session without exposing them globally.
+    Serializes concurrent claims via with_for_update() row locking and enforces
+    originating IP verification.
     """
-    result = await db.execute(select(ResearchJob).where(ResearchJob.id == job_id))
+    result = await db.execute(
+        select(ResearchJob).where(ResearchJob.id == job_id).with_for_update()
+    )
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Research job not found")
@@ -461,6 +477,12 @@ async def claim_legacy_job(
         )
 
     if not job.session_id:
+        # Require matching originating IP if known to prevent unverified cross-network claiming
+        if job.client_ip and client_ip and job.client_ip != client_ip:
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: Cannot claim legacy report created from a different IP address.",
+            )
         job.session_id = session_id
         await db.commit()
         await db.refresh(job)
