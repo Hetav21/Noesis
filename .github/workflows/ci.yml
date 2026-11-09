@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    name: Detect Changed Paths
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+              - 'flake.*'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+              - 'flake.*'
+
+  backend:
+    name: Backend (Python & Pytest)
+    needs: detect-changes
+    if: github.event_name == 'push' || needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "backend/uv.lock"
+
+      - name: Install Python interpreter
+        run: uv python install
+
+      - name: Sync dependencies
+        run: uv sync --frozen || uv sync
+
+      - name: Lint and format check (Ruff)
+        run: uvx ruff check . --output-format=github
+        continue-on-error: true
+
+      - name: Run test suite
+        run: PYTHONPATH=. uv run --with pytest --with pytest-asyncio pytest -v
+
+  frontend:
+    name: Frontend (Bun & Build)
+    needs: detect-changes
+    if: github.event_name == 'push' || needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Lint check
+        run: bun run lint
+        continue-on-error: true
+
+      - name: Build production bundle
+        run: bun run build
+
+  ci:
+    name: CI
+    needs: [detect-changes, backend, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate status
+        run: |
+          if [ "${{ needs.backend.result }}" = "failure" ] || [ "${{ needs.frontend.result }}" = "failure" ]; then
+            echo "CI checks failed."
+            exit 1
+          fi
+          echo "CI checks succeeded or cleanly skipped."
+

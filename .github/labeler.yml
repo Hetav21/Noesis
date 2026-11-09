@@ -1,0 +1,19 @@
+area:backend:
+  - changed-files:
+      - any-glob-to-any-file: ['backend/**']
+
+area:frontend:
+  - changed-files:
+      - any-glob-to-any-file: ['frontend/**']
+
+area:documentation:
+  - changed-files:
+      - any-glob-to-any-file: ['*.md', 'docs/**', 'backend/README.md', 'frontend/README.md']
+
+area:ci-cd:
+  - changed-files:
+      - any-glob-to-any-file: ['.github/**']
+
+area:environment:
+  - changed-files:
+      - any-glob-to-any-file: ['flake.*', '.env*', '.gitignore']

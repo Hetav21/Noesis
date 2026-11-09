@@ -9,6 +9,8 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+next-env.d.ts
+.ruff_cache/
 
 # Database
 *.db
