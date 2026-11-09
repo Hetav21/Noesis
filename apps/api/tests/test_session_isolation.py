@@ -255,6 +255,7 @@ async def test_shared_ip_rate_limiting_with_testing_false(monkeypatch):
     """Verify that separate sessions sharing a non-loopback IP are capped by the shared IP limit."""
     transport = ASGITransport(app=app)
     monkeypatch.setenv("TESTING", "false")
+    monkeypatch.setenv("ALLOW_QUEUE_ONLY", "true")
     monkeypatch.setenv("TRUST_ALL_PROXIES", "true")
     monkeypatch.setenv("RATE_LIMIT_JOBS_PER_HOUR", "2")
     monkeypatch.setenv("MAX_CONCURRENT_JOBS_PER_SESSION", "0")

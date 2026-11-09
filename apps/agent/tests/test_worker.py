@@ -4,17 +4,26 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from sqlmodel import text
+
+from app.db import async_session, init_db
 from app.main import app
 
 TEST_SECRET = "test-agent-internal-secret-32-bytes"
 
 
 @pytest.fixture(autouse=True)
-def setup_test_env():
+async def setup_test_env():
     os.environ["TESTING"] = "true"
     os.environ["AGENT_INTERNAL_SECRET"] = TEST_SECRET
     os.environ["ENABLE_QUEUE_POLLER"] = "false"
+    await init_db()
     yield
+    async with async_session() as session:
+        await session.execute(
+            text("DELETE FROM researchjob WHERE query LIKE 'Test%' OR id LIKE 'job-test-%'")
+        )
+        await session.commit()
 
 
 @pytest.mark.asyncio
