@@ -1,0 +1,148 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+early_access: false
+
+tone_instructions: >-
+  Expert AI Agent & Full-Stack reviewer: direct, technically precise, and actionable.
+  Prioritize async event loop safety (prevent blocking calls in async def), AI agent prompt
+  and token efficiency, SQLite/SQLModel concurrency integrity, Next.js / React 19 tactile UX,
+  and API secret protection.
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  collapse_walkthrough: true
+  poem: false
+  review_status: true
+  changed_files_summary: true
+  sequence_diagrams: false
+  estimate_code_review_effort: true
+  suggested_labels: true
+  auto_apply_labels: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+
+  pre_merge_checks:
+    title:
+      mode: "warning"
+      requirements: "PR titles should follow Conventional Commits (e.g. feat:, fix:, chore:, docs:, refactor:, perf:, test:, ci:)."
+    description:
+      mode: "warning"
+    custom_checks:
+      - name: "Plaintext API Keys & Secrets Safety"
+        mode: "error"
+        instructions: |-
+          Verify that:
+          1. No plaintext OpenAI API keys, search tokens, or private credentials appear in any file or test fixture.
+          2. Secrets and environment variables are strictly loaded via `os.environ` or `.env` configuration helpers.
+          3. `.env` and `.env.local` files are never tracked or introduced.
+
+      - name: "Async Event Loop Non-Blocking Execution"
+        mode: "error"
+        instructions: |-
+          Verify that:
+          1. Synchronous I/O operations (such as blocking network requests, synchronous `DDGS().text()`, or disk reads) are never executed directly on the main asyncio event loop inside `async def` endpoints.
+          2. Any synchronous blocking tasks are properly wrapped with `asyncio.to_thread` or use native async libraries (`httpx`, `aiosqlite`).
+          3. Agent iteration loops include cancellation awareness or reasonable timeouts.
+
+      - name: "Database & Concurrency Integrity"
+        mode: "warning"
+        instructions: |-
+          Verify that:
+          1. Database sessions with `aiosqlite` and `sqlmodel` are properly scoped, committed, and closed.
+          2. Concurrent job updates do not overwrite logs or status states with stale data.
+
+      - name: "Frontend State & Component Hygiene"
+        mode: "warning"
+        instructions: |-
+          Verify that:
+          1. Client components using React hooks or DOM APIs declare `'use client'` appropriately.
+          2. Avoid synchronous `setState` calls directly in effect bodies that trigger cascading re-renders.
+          3. Ensure streaming/polling research jobs handle error, timeout, and reconnection states cleanly.
+
+      - name: "CI Workflow Security"
+        mode: "error"
+        instructions: |-
+          In `.github/workflows/*.yml`:
+          1. Workflows declare explicit minimal permissions (e.g. `contents: read`).
+          2. Concurrency groups cancel redundant in-progress runs on branch updates.
+          3. Actions pin major versions or commit SHAs.
+
+  tools:
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    trufflehog:
+      enabled: false
+
+  path_filters:
+    - "!**/*.lock"
+    - "!**/*.db"
+    - "!**/*.sqlite*"
+    - "!*.log"
+    - "!.git/**"
+    - "!.direnv/**"
+    - "!node_modules/**"
+    - "!**/.venv/**"
+    - "!**/.next/**"
+    - "!**/dist/**"
+
+  path_instructions:
+    - path: "backend/app/agents/**"
+      instructions: |-
+        AI Agent Architecture Guidelines:
+        1. Keep prompt templates modular and externalized where possible.
+        2. Validate model outputs using Pydantic schemas.
+        3. Ensure model parameters (temperature, top_p, max_tokens) are configurable via `get_agent_settings`.
+
+    - path: "backend/app/services/**"
+      instructions: |-
+        Research Engine & Tool Execution:
+        1. Ensure external search tool failures are caught and logged gracefully without crashing the overall research synthesis.
+        2. Wrap blocking external search calls in `asyncio.to_thread`.
+        3. Maintain clean step logging to support real-time frontend job progress tracking.
+
+    - path: "backend/app/models.py"
+      instructions: |-
+        Data Models & Serialization:
+        1. Maintain backward compatibility for serialized logs and job status fields.
+        2. Use typed Pydantic models for request and response validation.
+
+    - path: "frontend/src/**"
+      instructions: |-
+        Frontend Application Guidelines:
+        1. Maintain a clean, tactile design language.
+        2. Keep components composable and accessible.
+        3. Prefer typed utilities and hooks for API communication and polling.
+
+    - path: ".github/workflows/*.yml"
+      instructions: |-
+        GitHub Actions Guidelines:
+        1. Keep timeouts configured (`timeout-minutes`).
+        2. Maintain path filtering for monorepo efficiency.
+        3. Use pinned actions.
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+  learnings:
+    scope: "local"
+
+chat:
+  auto_reply: true
+  art: false
