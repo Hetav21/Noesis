@@ -208,6 +208,7 @@ async def lifespan(app: FastAPI):
         try:
             await poller_task
         except asyncio.CancelledError:
+            # Expected when the background queue poller task is cancelled on app shutdown
             pass
 
     # Cancel any active running jobs on shutdown
