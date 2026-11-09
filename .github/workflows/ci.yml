@@ -32,6 +32,7 @@ jobs:
         uses: dorny/paths-filter@v3
         id: filter
         with:
+          base: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || '' }}
           filters: |
             api:
               - 'apps/api/**'
@@ -49,7 +50,7 @@ jobs:
   api:
     name: REST API (Python & Pytest)
     needs: detect-changes
-    if: github.event_name == 'push' || needs.detect-changes.outputs.api == 'true'
+    if: needs.detect-changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -101,7 +102,7 @@ jobs:
   agent:
     name: Agent Engine (Python & Pytest)
     needs: detect-changes
-    if: github.event_name == 'push' || needs.detect-changes.outputs.agent == 'true'
+    if: needs.detect-changes.outputs.agent == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -154,7 +155,7 @@ jobs:
   web:
     name: Web App (Bun & Build)
     needs: detect-changes
-    if: github.event_name == 'push' || needs.detect-changes.outputs.web == 'true'
+    if: needs.detect-changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -186,7 +187,7 @@ jobs:
     steps:
       - name: Evaluate status
         run: |
-          if [ "${{ needs.api.result }}" = "failure" ] || [ "${{ needs.agent.result }}" = "failure" ] || [ "${{ needs.web.result }}" = "failure" ]; then
+          if [ "${{ needs.detect-changes.result }}" != "success" ] || [ "${{ needs.api.result }}" = "failure" ] || [ "${{ needs.agent.result }}" = "failure" ] || [ "${{ needs.web.result }}" = "failure" ]; then
             echo "CI checks failed."
             exit 1
           fi

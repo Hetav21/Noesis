@@ -5,13 +5,14 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Annotated
 
+import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import desc, select
 
 from app.db import check_db_health, get_session, init_db
-from app.dispatcher import dispatch_research_job
+from app.dispatcher import dispatch_research_job, is_dispatch_configured
 from app.limiter import (
     check_rate_limits,
     rate_limit_lock,
@@ -275,6 +276,12 @@ async def create_research_job(
     if not query_text:
         raise HTTPException(status_code=400, detail="Research query cannot be empty")
 
+    if not is_dispatch_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="No agent execution engine configured (AGENT_SERVICE_URL is unset).",
+        )
+
     depth = max(1, min(5, research_job_create.depth))
     breadth = max(2, min(10, research_job_create.breadth))
 
@@ -371,6 +378,21 @@ async def delete_research_job(
             status_code=403,
             detail="Forbidden: You do not have permission to delete this research session.",
         )
+
+    # If the job is active, attempt remote cancellation so agent resources are not wasted
+    if job.status in (JobStatus.QUEUED, JobStatus.RUNNING):
+        agent_url = os.getenv("AGENT_SERVICE_URL", "").strip().rstrip("/")
+        secret = (
+            os.getenv("AGENT_INTERNAL_SECRET", "").strip()
+            or os.getenv("INTERNAL_SERVICE_KEY", "").strip()
+        )
+        if agent_url:
+            try:
+                headers = {"X-Internal-Secret": secret} if secret else {}
+                async with httpx.AsyncClient(timeout=3.0) as client:
+                    await client.post(f"{agent_url}/api/jobs/{job_id}/cancel", headers=headers)
+            except Exception as err:  # noqa: BLE001
+                print(f"[API] Note: Cancellation forward to agent resulted in: {err}")
 
     await db.delete(job)
     await db.commit()

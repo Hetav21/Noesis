@@ -22,9 +22,13 @@ def get_session_secret() -> str:
             "SESSION_SECRET environment variable is required and must not be empty. "
             "Please configure a cryptographically random secret string."
         )
-    if secret == "change-this-to-a-secure-random-secret-in-production":
+    insecure_placeholders = {
+        "change-this-to-a-secure-random-secret-in-production",
+        "change-this-to-a-cryptographically-random-secret-in-production",
+    }
+    if secret in insecure_placeholders or secret.startswith("change-this-to-"):
         raise ValueError(
-            "SESSION_SECRET is configured with the example placeholder value. "
+            "SESSION_SECRET is configured with an example placeholder value. "
             "Please configure a secure unique random string."
         )
     return secret

@@ -3,13 +3,14 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from app.dispatcher import dispatch_research_job
+from app.dispatcher import dispatch_research_job, is_dispatch_configured
 
 
 @pytest.mark.asyncio
-async def test_dispatch_fallback_when_no_agent_url(monkeypatch):
-    """When AGENT_SERVICE_URL is unset, dispatcher returns True cleanly without error."""
+async def test_dispatch_fallback_when_testing_or_queue_only(monkeypatch):
+    """When AGENT_SERVICE_URL is unset but in test mode, dispatcher returns True."""
     monkeypatch.delenv("AGENT_SERVICE_URL", raising=False)
+    monkeypatch.setenv("TESTING", "true")
     success = await dispatch_research_job(
         job_id="test-job-1",
         query="Quantum gravity",
@@ -17,6 +18,21 @@ async def test_dispatch_fallback_when_no_agent_url(monkeypatch):
         breadth=2,
     )
     assert success is True
+
+
+def test_is_dispatch_configured(monkeypatch):
+    """Verify is_dispatch_configured logic across env states."""
+    monkeypatch.delenv("AGENT_SERVICE_URL", raising=False)
+    monkeypatch.delenv("ALLOW_QUEUE_ONLY", raising=False)
+    monkeypatch.delenv("TESTING", raising=False)
+    assert is_dispatch_configured() is False
+
+    monkeypatch.setenv("ALLOW_QUEUE_ONLY", "true")
+    assert is_dispatch_configured() is True
+
+    monkeypatch.delenv("ALLOW_QUEUE_ONLY", raising=False)
+    monkeypatch.setenv("AGENT_SERVICE_URL", "https://agent.example.com")
+    assert is_dispatch_configured() is True
 
 
 @pytest.mark.asyncio
