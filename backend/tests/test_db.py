@@ -42,6 +42,21 @@ def test_get_database_url_asyncpg_already():
         assert url == "postgresql+asyncpg://user:secret@localhost:5432/noesis_prod"
 
 
+def test_get_database_url_sslmode_normalized():
+    with patch.dict(
+        os.environ,
+        {
+            "DATABASE_URL": "postgresql://user:secret@ep-test.neon.tech/neondb?sslmode=require"
+        },
+        clear=True,
+    ):
+        url = get_database_url()
+        assert (
+            url
+            == "postgresql+asyncpg://user:secret@ep-test.neon.tech/neondb?ssl=require"
+        )
+
+
 @pytest.mark.asyncio
 async def test_check_db_health():
     await init_db()

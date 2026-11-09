@@ -49,9 +49,7 @@ class ResearchWorkflow:
                 print(f"Log callback error: {e}")
 
     async def research(self) -> str:
-        await self._log(
-            {"type": "status", "message": "Starting research workflow..."}
-        )
+        await self._log({"type": "status", "message": "Starting research workflow..."})
         with trace("Noesis Research Workflow"):
             query_response = await self.generate_queries()
             await self.perform_research_for_queries(queries=query_response.queries)

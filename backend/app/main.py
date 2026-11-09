@@ -180,7 +180,6 @@ async def get_suggestions(
         finally:
             _suggestions_inflight.pop(cache_key, None)
     except Exception as e:  # noqa: BLE001
-
         print(f"Suggestions generation note: {e}")
 
     return {"suggestions": default_suggestions}

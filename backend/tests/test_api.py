@@ -5,7 +5,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-from app.db import get_session
+from app.db import get_session, init_db
 from app.main import app
 
 
@@ -44,7 +44,6 @@ async def test_health_check():
             assert data["status"] in ["ok", "degraded"]
             assert data["service"] == "noesis"
             assert data["database"] == "connected"
-
 
 
 @pytest.mark.asyncio
