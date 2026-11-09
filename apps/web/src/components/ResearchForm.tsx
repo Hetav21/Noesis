@@ -26,8 +26,8 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
 }) => {
   const [query, setQuery] = useState("");
   const [preset, setPreset] = useState<DepthPreset>("standard");
-  const [depth, setDepth] = useState<number>(2);
-  const [breadth, setBreadth] = useState<number>(4);
+  const [depth, setDepth] = useState<number | "">(2);
+  const [breadth, setBreadth] = useState<number | "">(4);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>(DEFAULT_SUGGESTIONS);
   const [isRefreshingSuggestions, setIsRefreshingSuggestions] = useState(false);
@@ -103,7 +103,15 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim() && !isLoading) {
-      onSubmit(query.trim(), depth, breadth);
+      const finalDepth =
+        typeof depth === "number" && !isNaN(depth)
+          ? Math.min(5, Math.max(1, depth))
+          : 2;
+      const finalBreadth =
+        typeof breadth === "number" && !isNaN(breadth)
+          ? Math.min(10, Math.max(2, breadth))
+          : 4;
+      onSubmit(query.trim(), finalDepth, finalBreadth);
     }
   };
 
@@ -249,10 +257,44 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                         min={1}
                         max={5}
                         value={depth}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => {
-                          const val = parseInt(e.target.value, 10);
+                          const raw = e.target.value;
+                          if (raw === "") {
+                            setDepth("");
+                            setPreset("custom");
+                            return;
+                          }
+                          const val = parseInt(raw, 10);
                           if (!isNaN(val)) {
-                            setDepth(Math.min(5, Math.max(1, val)));
+                            if (val > 5) {
+                              setDepth(5);
+                            } else {
+                              setDepth(val);
+                            }
+                            setPreset("custom");
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (isNaN(val) || val < 1) {
+                            setDepth(1);
+                          } else if (val > 5) {
+                            setDepth(5);
+                          } else {
+                            setDepth(val);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            const current = typeof depth === "number" ? depth : 1;
+                            setDepth(Math.min(5, current + 1));
+                            setPreset("custom");
+                          } else if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            const current = typeof depth === "number" ? depth : 1;
+                            setDepth(Math.max(1, current - 1));
                             setPreset("custom");
                           }
                         }}
@@ -267,7 +309,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                       min={1}
                       max={5}
                       step={1}
-                      value={depth}
+                      value={typeof depth === "number" ? depth : 1}
                       aria-labelledby="depth-label"
                       onChange={(e) => {
                         setDepth(Number(e.target.value));
@@ -307,10 +349,44 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                         min={2}
                         max={10}
                         value={breadth}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => {
-                          const val = parseInt(e.target.value, 10);
+                          const raw = e.target.value;
+                          if (raw === "") {
+                            setBreadth("");
+                            setPreset("custom");
+                            return;
+                          }
+                          const val = parseInt(raw, 10);
                           if (!isNaN(val)) {
-                            setBreadth(Math.min(10, Math.max(2, val)));
+                            if (val > 10) {
+                              setBreadth(10);
+                            } else {
+                              setBreadth(val);
+                            }
+                            setPreset("custom");
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (isNaN(val) || val < 2) {
+                            setBreadth(2);
+                          } else if (val > 10) {
+                            setBreadth(10);
+                          } else {
+                            setBreadth(val);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            const current = typeof breadth === "number" ? breadth : 2;
+                            setBreadth(Math.min(10, current + 1));
+                            setPreset("custom");
+                          } else if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            const current = typeof breadth === "number" ? breadth : 2;
+                            setBreadth(Math.max(2, current - 1));
                             setPreset("custom");
                           }
                         }}
@@ -325,7 +401,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                       min={2}
                       max={10}
                       step={1}
-                      value={breadth}
+                      value={typeof breadth === "number" ? breadth : 2}
                       aria-labelledby="breadth-label"
                       onChange={(e) => {
                         setBreadth(Number(e.target.value));
