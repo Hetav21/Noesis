@@ -81,3 +81,30 @@ async def dispatch_research_job(
 
     # When AGENT_SERVICE_URL is not set (e.g. testing or explicit queue-only worker setup):
     return is_dispatch_configured()
+
+
+async def cancel_remote_job(job_id: str) -> bool:
+    """Send remote cancellation request to the agent engine on Render via fixed static URL."""
+    agent_url = os.getenv("AGENT_SERVICE_URL", "").strip().rstrip("/")
+    secret = (
+        os.getenv("AGENT_INTERNAL_SECRET", "").strip()
+        or os.getenv("INTERNAL_SERVICE_KEY", "").strip()
+    )
+    if not agent_url:
+        return False
+
+    try:
+        headers = {}
+        if secret:
+            headers["X-Internal-Secret"] = secret
+
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            res = await client.post(
+                f"{agent_url}/api/jobs/cancel",
+                json={"job_id": job_id},
+                headers=headers,
+            )
+            return res.status_code in (200, 202)
+    except Exception as err:  # noqa: BLE001
+        print(f"[Dispatcher] Note: Cancellation forward to agent resulted in: {err}")
+        return False

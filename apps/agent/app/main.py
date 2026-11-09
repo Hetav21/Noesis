@@ -383,12 +383,11 @@ async def dispatch_job(
     return {"status": "accepted", "job_id": req.job_id}
 
 
-@app.post("/api/jobs/{job_id}/cancel")
-async def cancel_job(
-    job_id: str,
-    _auth: bool = Depends(verify_internal_secret),
-):
-    """Cancel an in-flight research execution, signaling across instances."""
+class CancelJobRequest(BaseModel):
+    job_id: str
+
+
+async def _cancel_job_internal(job_id: str) -> dict[str, str]:
     task = _active_jobs.get(job_id)
     if task:
         task.cancel()
@@ -418,3 +417,21 @@ async def cancel_job(
         job.logs = logs
         await db.commit()
         return {"status": "cancelled", "job_id": job_id}
+
+
+@app.post("/api/jobs/cancel")
+async def cancel_job_endpoint(
+    req: CancelJobRequest,
+    _auth: bool = Depends(verify_internal_secret),
+) -> dict[str, str]:
+    """Cancel an in-flight research execution via JSON payload to eliminate URL SSRF sinks."""
+    return await _cancel_job_internal(req.job_id)
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(
+    job_id: str,
+    _auth: bool = Depends(verify_internal_secret),
+) -> dict[str, str]:
+    """Cancel an in-flight research execution, signaling across instances."""
+    return await _cancel_job_internal(job_id)

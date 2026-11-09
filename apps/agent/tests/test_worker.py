@@ -74,3 +74,25 @@ async def test_dispatch_accepted_with_secret():
             data = res.json()
             assert data["status"] == "accepted"
             assert data["job_id"] == "job-test-456"
+
+
+@pytest.mark.asyncio
+async def test_cancel_job_via_payload():
+    """Verify cancellation endpoint accepts json payload with authorization."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Without secret -> 401
+        res = await client.post(
+            "/api/jobs/cancel",
+            json={"job_id": "job-test-nonexistent"},
+        )
+        assert res.status_code == 401
+
+        # With secret but nonexistent job -> 404
+        res = await client.post(
+            "/api/jobs/cancel",
+            json={"job_id": "job-test-nonexistent"},
+            headers={"X-Internal-Secret": TEST_SECRET},
+        )
+        assert res.status_code == 404
+
