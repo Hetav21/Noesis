@@ -121,7 +121,11 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              if (
+                e.key === "Enter" &&
+                !e.shiftKey &&
+                !e.nativeEvent.isComposing
+              ) {
                 e.preventDefault();
                 handleSubmit(e);
               }
@@ -232,6 +236,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <label
+                      id="depth-label"
                       htmlFor="depth-input"
                       className="text-zinc-200 font-medium"
                     >
@@ -260,11 +265,13 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                   </div>
                   <div className="flex items-center gap-2">
                     <input
+                      id="depth-slider"
                       type="range"
                       min={1}
                       max={5}
                       step={1}
                       value={depth}
+                      aria-labelledby="depth-label"
                       onChange={(e) => {
                         setDepth(Number(e.target.value));
                         setPreset("custom");
@@ -287,6 +294,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <label
+                      id="breadth-label"
                       htmlFor="breadth-input"
                       className="text-zinc-200 font-medium"
                     >
@@ -294,18 +302,18 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                     </label>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] text-zinc-500 font-mono">
-                        2 – 15
+                        2 – 10
                       </span>
                       <input
                         id="breadth-input"
                         type="number"
                         min={2}
-                        max={15}
+                        max={10}
                         value={breadth}
                         onChange={(e) => {
                           const val = parseInt(e.target.value, 10);
                           if (!isNaN(val)) {
-                            setBreadth(Math.min(15, Math.max(2, val)));
+                            setBreadth(Math.min(10, Math.max(2, val)));
                             setPreset("custom");
                           }
                         }}
@@ -315,11 +323,13 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                   </div>
                   <div className="flex items-center gap-2">
                     <input
+                      id="breadth-slider"
                       type="range"
                       min={2}
-                      max={15}
+                      max={10}
                       step={1}
                       value={breadth}
+                      aria-labelledby="breadth-label"
                       onChange={(e) => {
                         setBreadth(Number(e.target.value));
                         setPreset("custom");
@@ -329,8 +339,8 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                   </div>
                   <div className="flex justify-between text-[10px] text-zinc-500 font-mono px-0.5">
                     <span>2 sources</span>
-                    <span>8 sources</span>
-                    <span>15 sources</span>
+                    <span>6 sources</span>
+                    <span>10 sources</span>
                   </div>
                   <p className="text-[10px] text-zinc-500 leading-relaxed">
                     Maximum live web results scraped and analyzed for each

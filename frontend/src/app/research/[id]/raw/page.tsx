@@ -86,10 +86,10 @@ export default function ResearchRawPage({ params }: RawPageProps) {
   const readTime = Math.max(1, Math.ceil(wordCount / 220));
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100 py-10 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 py-10 px-4 sm:px-6 lg:px-8 print:bg-white print:text-black print:py-0 print:px-0">
+      <div className="max-w-3xl mx-auto space-y-8 print:space-y-4 print:max-w-none">
         {/* Top Floating Controls */}
-        <div className="flex items-center justify-between pb-6 border-b border-white/[0.08] text-xs text-zinc-400">
+        <div className="flex items-center justify-between pb-6 border-b border-white/[0.08] text-xs text-zinc-400 print:hidden">
           <Link
             href={`/research/${jobId}`}
             className="inline-flex items-center gap-1.5 hover:text-white transition-colors"
@@ -142,10 +142,10 @@ export default function ResearchRawPage({ params }: RawPageProps) {
               year: "numeric",
             })}
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight print:text-black">
             {job.query}
           </h1>
-          <div className="flex items-center gap-3 text-xs text-zinc-500 font-mono pt-1">
+          <div className="flex items-center gap-3 text-xs text-zinc-500 font-mono pt-1 print:text-zinc-600">
             <span>{wordCount.toLocaleString()} words</span>
             <span>•</span>
             <span>~{readTime} min read</span>
@@ -157,7 +157,7 @@ export default function ResearchRawPage({ params }: RawPageProps) {
         </div>
 
         {/* Document Body */}
-        <article className="markdown-body pt-4 border-t border-white/[0.06]">
+        <article className="markdown-body pt-4 border-t border-white/[0.06] print:text-black print:border-zinc-200">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
             {job.result}
           </ReactMarkdown>

@@ -42,7 +42,13 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
       if (showLoading) setIsLoading(true);
       try {
         const data = await api.getResearch(jobId);
-        setJob(data);
+        // Prevent stale responses from overwriting completed or terminal job state
+        setJob((prev) => {
+          if (prev?.status === "completed" && data.status !== "completed") {
+            return prev;
+          }
+          return data;
+        });
         statusRef.current = data.status;
         setError(null);
 
@@ -217,7 +223,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
           </h1>
 
           {/* View Mode Switcher */}
-          {isCompleted && (
+          {(isCompleted || job.status === "failed") && (
             <div className="pt-2 flex items-center justify-between gap-3 border-t border-white/[0.06]">
               <div className="flex items-center gap-1 bg-zinc-900/90 p-1 rounded-xl border border-white/[0.06] text-xs">
                 <button

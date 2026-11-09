@@ -14,7 +14,7 @@ A high-performance, portfolio-grade autonomous research platform powered by a mu
   * **Synthesis Agent**: Produces an executive-level, citation-backed Markdown brief complete with structured sections, comparative tables, and strategic takeaways.
 * **Tactile, Modern Next.js Workspace**:
   * Real-time polling agent event stream categorized by reasoning, queries, and scraped sources.
-  * Dynamic reading time, word count, and table-of-contents extraction.
+  * Reading time, word count, and structured brief synthesis.
   * Preset research prompts, scope estimation indicators, session history archive, one-click Markdown download, and shareable link generation.
   * Native dark-mode palette, subtle border glows, monospace telemetry badges, and zero generic template clutter.
 
@@ -98,7 +98,7 @@ Open [http://localhost:3001](http://localhost:3001) in your browser.
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/health` | Service health status and database liveness |
+| `GET` | `/api/health` | Service status; does not check the database |
 | `POST` | `/api/research` | Submit a new research task (`query`, `depth`, `breadth`) |
 | `GET` | `/api/research` | List recent research sessions |
 | `GET` | `/api/research/{id}` | Fetch session status, live logs, and synthesized result |
