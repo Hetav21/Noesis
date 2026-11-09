@@ -55,14 +55,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             const text = getNodeText(children);
             const slugs = getHeadingSlugs(text);
             const primaryId = slugs[0];
+            const secondarySlugs = slugs.filter((s) => s !== primaryId);
 
             return (
               <div className="relative group/h1">
-                {slugs.map((slug) => (
+                {secondarySlugs.map((slug) => (
                   <span
                     key={slug}
                     id={slug}
-                    className="absolute -top-24 block pointer-events-none"
+                    className="scroll-mt-24 pointer-events-none"
                     aria-hidden="true"
                   />
                 ))}
@@ -95,14 +96,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             const text = getNodeText(children);
             const slugs = getHeadingSlugs(text);
             const primaryId = slugs[0];
+            const secondarySlugs = slugs.filter((s) => s !== primaryId);
 
             return (
               <div className="relative group/h2">
-                {slugs.map((slug) => (
+                {secondarySlugs.map((slug) => (
                   <span
                     key={slug}
                     id={slug}
-                    className="absolute -top-24 block pointer-events-none"
+                    className="scroll-mt-24 pointer-events-none"
                     aria-hidden="true"
                   />
                 ))}
@@ -135,14 +137,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             const text = getNodeText(children);
             const slugs = getHeadingSlugs(text);
             const primaryId = slugs[0];
+            const secondarySlugs = slugs.filter((s) => s !== primaryId);
 
             return (
               <div className="relative group/h3">
-                {slugs.map((slug) => (
+                {secondarySlugs.map((slug) => (
                   <span
                     key={slug}
                     id={slug}
-                    className="absolute -top-24 block pointer-events-none"
+                    className="scroll-mt-24 pointer-events-none"
                     aria-hidden="true"
                   />
                 ))}
