@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict, Any
 from sqlmodel import SQLModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from enum import Enum
 
@@ -19,7 +19,7 @@ class ResearchJob(ResearchJobBase, table=True):
     id: Optional[str] = Field(default=None, primary_key=True)
     status: JobStatus = Field(default=JobStatus.QUEUED)
     result: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     logs_json: str = Field(default="[]")  # Store logs as JSON string
     
     @property
