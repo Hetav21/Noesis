@@ -3,10 +3,9 @@ language: "en-US"
 early_access: false
 
 tone_instructions: >-
-  Expert AI Agent & Full-Stack reviewer: direct, technically precise, and actionable.
-  Prioritize async event loop safety (prevent blocking calls in async def), AI agent prompt
-  and token efficiency, SQLite/SQLModel concurrency integrity, Next.js / React 19 tactile UX,
-  and API secret protection.
+  Direct, technically precise, and actionable. Prioritize async event loop safety,
+  agent prompt efficiency, SQLite/SQLModel concurrency, Next.js/React 19 state
+  hygiene, and secret protection.
 
 reviews:
   profile: "chill"
@@ -26,8 +25,7 @@ reviews:
     drafts: false
     base_branches:
       - "main"
-      - "feat/*"
-      - "feat/**"
+      - "feat/.*"
 
   pre_merge_checks:
     title:
