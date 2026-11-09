@@ -92,7 +92,7 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs, status }) => {
     // Source URL
     if (rawMessage.startsWith("URL: ")) {
       const url = rawMessage.replace("URL: ", "").trim();
-      let hostname = url;
+      let hostname: string;
       try {
         hostname = new URL(url).hostname;
       } catch {
