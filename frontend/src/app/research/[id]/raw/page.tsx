@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, use } from 'react';
-import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { api, type ResearchJob } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { ArrowLeft, Copy, Check, Download, Printer } from 'lucide-react';
+import React, { useEffect, useState, use } from "react";
+import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { api, type ResearchJob } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, Copy, Check, Download, Printer } from "lucide-react";
 
 interface RawPageProps {
   params: Promise<{ id: string }>;
@@ -20,9 +20,10 @@ export default function ResearchRawPage({ params }: RawPageProps) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    api.getResearch(jobId)
+    api
+      .getResearch(jobId)
       .then((data) => setJob(data))
-      .catch((err) => console.warn('Could not load report in raw mode:', err))
+      .catch((err) => console.warn("Could not load report in raw mode:", err))
       .finally(() => setIsLoading(false));
   }, [jobId]);
 
@@ -39,12 +40,17 @@ export default function ResearchRawPage({ params }: RawPageProps) {
 
   const handleDownload = () => {
     if (!job?.result) return;
-    const sanitized = job.query.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
-    const blob = new Blob([job.result], { type: 'text/markdown;charset=utf-8' });
+    const sanitized = job.query
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .slice(0, 40);
+    const blob = new Blob([job.result], {
+      type: "text/markdown;charset=utf-8",
+    });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `research-${sanitized || 'report'}.md`;
+    a.download = `research-${sanitized || "report"}.md`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -60,9 +66,15 @@ export default function ResearchRawPage({ params }: RawPageProps) {
   if (!job || !job.result) {
     return (
       <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center p-8 space-y-3">
-        <div className="text-zinc-300 font-medium">Report not ready or not found</div>
+        <div className="text-zinc-300 font-medium">
+          Report not ready or not found
+        </div>
         <Link href={`/research/${jobId}`}>
-          <Button variant="secondary" size="sm" leftIcon={<ArrowLeft className="w-3.5 h-3.5" />}>
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<ArrowLeft className="w-3.5 h-3.5" />}
+          >
             Back to session
           </Button>
         </Link>
@@ -91,9 +103,15 @@ export default function ResearchRawPage({ params }: RawPageProps) {
               variant="outline"
               size="sm"
               onClick={handleCopy}
-              leftIcon={copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              leftIcon={
+                copied ? (
+                  <Check className="w-3 h-3 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )
+              }
             >
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? "Copied" : "Copy"}
             </Button>
             <Button
               variant="outline"
@@ -117,7 +135,12 @@ export default function ResearchRawPage({ params }: RawPageProps) {
         {/* Document Header */}
         <div className="space-y-3">
           <div className="text-xs font-mono text-zinc-500 uppercase tracking-wider">
-            Research Brief • {new Date(job.created_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+            Research Brief •{" "}
+            {new Date(job.created_at).toLocaleDateString(undefined, {
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })}
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight">
             {job.query}
@@ -127,7 +150,9 @@ export default function ResearchRawPage({ params }: RawPageProps) {
             <span>•</span>
             <span>~{readTime} min read</span>
             <span>•</span>
-            <span>{job.depth} research {job.depth === 1 ? 'round' : 'rounds'}</span>
+            <span>
+              {job.depth} research {job.depth === 1 ? "round" : "rounds"}
+            </span>
           </div>
         </div>
 

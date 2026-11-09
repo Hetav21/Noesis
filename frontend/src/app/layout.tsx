@@ -1,10 +1,10 @@
-import type { Metadata } from 'next';
-import './globals.css';
-import { Navbar } from '@/components/Navbar';
+import type { Metadata } from "next";
+import "./globals.css";
+import { Navbar } from "@/components/Navbar";
 
 export const metadata: Metadata = {
-  title: 'Deep Research',
-  description: 'AI-assisted research reports synthesized from across the web.',
+  title: "Deep Research",
+  description: "AI-assisted research reports synthesized from across the web.",
 };
 
 export default function RootLayout({
@@ -21,7 +21,7 @@ export default function RootLayout({
           <div className="max-w-4xl mx-auto flex items-center justify-between">
             <span className="font-mono text-zinc-400">Deep Research</span>
             <span className="text-zinc-500">
-              Made with care by{' '}
+              Made with care by{" "}
               <a
                 href="https://hetav.dev"
                 target="_blank"

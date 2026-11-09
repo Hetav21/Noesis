@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
-import { api, type ResearchJob } from '@/lib/api';
-import { Badge } from './ui/badge';
-import { Button } from './ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { ArrowUpRight, Trash2, RefreshCw } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
+import { api, type ResearchJob } from "@/lib/api";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+import { ArrowUpRight, Trash2, RefreshCw } from "lucide-react";
 
 export const RecentSessions: React.FC = () => {
   const [jobs, setJobs] = useState<ResearchJob[]>([]);
@@ -21,8 +21,10 @@ export const RecentSessions: React.FC = () => {
       const data = await api.listResearch(15, 0);
       setJobs(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.warn('Failed to load recent sessions', err);
-      setError('Could not reach backend service. Check if API server is running.');
+      console.warn("Failed to load recent sessions", err);
+      setError(
+        "Could not reach backend service. Check if API server is running.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -35,40 +37,40 @@ export const RecentSessions: React.FC = () => {
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
-    if (confirm('Delete this research session?')) {
+    if (confirm("Delete this research session?")) {
       setIsDeleting(id);
       try {
         await api.deleteResearch(id);
         setJobs((prev) => prev.filter((j) => j.id !== id));
       } catch (err) {
-        console.error('Failed to delete job', err);
+        console.error("Failed to delete job", err);
       } finally {
         setIsDeleting(null);
       }
     }
   };
 
-  const getStatusBadge = (status: ResearchJob['status']) => {
+  const getStatusBadge = (status: ResearchJob["status"]) => {
     switch (status) {
-      case 'completed':
+      case "completed":
         return (
           <Badge variant="success" dot>
             Completed
           </Badge>
         );
-      case 'running':
+      case "running":
         return (
           <Badge variant="warning" dot pulse>
             Running
           </Badge>
         );
-      case 'failed':
+      case "failed":
         return (
           <Badge variant="danger" dot>
             Failed
           </Badge>
         );
-      case 'queued':
+      case "queued":
       default:
         return (
           <Badge variant="neutral" dot>
@@ -82,10 +84,10 @@ export const RecentSessions: React.FC = () => {
     try {
       const date = new Date(isoString);
       return date.toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       });
     } catch {
       return isoString;
@@ -117,7 +119,9 @@ export const RecentSessions: React.FC = () => {
       <CardContent className="p-0">
         {error ? (
           <div className="py-8 px-6 text-center text-xs space-y-2">
-            <p className="text-zinc-400 font-medium">Unable to load research history</p>
+            <p className="text-zinc-400 font-medium">
+              Unable to load research history
+            </p>
             <p className="text-zinc-500 max-w-sm mx-auto">
               Backend service was temporarily unreachable.
             </p>
@@ -157,7 +161,7 @@ export const RecentSessions: React.FC = () => {
                       {formatDate(job.created_at)}
                     </span>
                     <span className="text-[11px] text-zinc-500">
-                      • {job.depth} {job.depth === 1 ? 'round' : 'rounds'}
+                      • {job.depth} {job.depth === 1 ? "round" : "rounds"}
                     </span>
                   </div>
                   <Link
@@ -175,7 +179,7 @@ export const RecentSessions: React.FC = () => {
                       size="sm"
                       rightIcon={<ArrowUpRight className="w-3.5 h-3.5" />}
                     >
-                      {job.status === 'completed' ? 'View Report' : 'View'}
+                      {job.status === "completed" ? "View Report" : "View"}
                     </Button>
                   </Link>
                   <Button

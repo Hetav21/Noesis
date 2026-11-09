@@ -1,14 +1,10 @@
-'use client';
+"use client";
 
-import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { Button } from './ui/button';
-import type { LogEvent } from '@/lib/api';
-import {
-  ExternalLink,
-  ArrowDown,
-  Layers,
-} from 'lucide-react';
+import React, { useEffect, useRef, useState, useMemo } from "react";
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+import { Button } from "./ui/button";
+import type { LogEvent } from "@/lib/api";
+import { ExternalLink, ArrowDown, Layers } from "lucide-react";
 
 interface ResearchLogProps {
   logs: LogEvent[];
@@ -19,7 +15,7 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs, status }) => {
   const logEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'reasoning' | 'sources'>('all');
+  const [filter, setFilter] = useState<"all" | "reasoning" | "sources">("all");
 
   useEffect(() => {
     if (autoScroll && containerRef.current) {
@@ -35,22 +31,22 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs, status }) => {
   };
 
   const filteredLogs = useMemo(() => {
-    if (filter === 'all') return logs;
+    if (filter === "all") return logs;
     return logs.filter((log) => {
-      const msg = (log.message || log.title || log.content || '').toLowerCase();
-      if (filter === 'sources') {
+      const msg = (log.message || log.title || log.content || "").toLowerCase();
+      if (filter === "sources") {
         return (
-          msg.includes('url:') ||
-          msg.includes('searching for:') ||
-          msg.includes('result:') ||
-          msg.includes('summary:')
+          msg.includes("url:") ||
+          msg.includes("searching for:") ||
+          msg.includes("result:") ||
+          msg.includes("summary:")
         );
       }
-      if (filter === 'reasoning') {
+      if (filter === "reasoning") {
         return (
-          msg.includes('thoughts:') ||
-          msg.includes('reasoning:') ||
-          msg.includes('decision:')
+          msg.includes("thoughts:") ||
+          msg.includes("reasoning:") ||
+          msg.includes("decision:")
         );
       }
       return true;
@@ -59,25 +55,33 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs, status }) => {
 
   // Derive current phase
   const currentPhase = useMemo(() => {
-    if (status === 'completed') return 'Finished';
-    if (status === 'failed') return 'Failed';
-    if (logs.length === 0) return 'Starting...';
+    if (status === "completed") return "Finished";
+    if (status === "failed") return "Failed";
+    if (logs.length === 0) return "Starting...";
 
     const lastLog = logs[logs.length - 1];
-    const lastMsg = (lastLog?.message || lastLog?.title || '').toLowerCase();
-    if (lastMsg.includes('synthesis') || lastMsg.includes('synthesizing')) return 'Writing report...';
-    if (lastMsg.includes('evaluating') || lastMsg.includes('follow-up')) return 'Evaluating findings...';
-    if (lastMsg.includes('analyzing') || lastMsg.includes('summary:')) return 'Analyzing sources...';
-    if (lastMsg.includes('searching')) return 'Searching the web...';
-    if (lastMsg.includes('query')) return 'Generating queries...';
-    return 'In progress';
+    const lastMsg = (lastLog?.message || lastLog?.title || "").toLowerCase();
+    if (lastMsg.includes("synthesis") || lastMsg.includes("synthesizing"))
+      return "Writing report...";
+    if (lastMsg.includes("evaluating") || lastMsg.includes("follow-up"))
+      return "Evaluating findings...";
+    if (lastMsg.includes("analyzing") || lastMsg.includes("summary:"))
+      return "Analyzing sources...";
+    if (lastMsg.includes("searching")) return "Searching the web...";
+    if (lastMsg.includes("query")) return "Generating queries...";
+    return "In progress";
   }, [logs, status]);
 
   const renderLogMessage = (log: LogEvent) => {
-    const rawMessage = (log.message || log.title || log.content || '').toString();
+    const rawMessage = (
+      log.message ||
+      log.title ||
+      log.content ||
+      ""
+    ).toString();
 
     // Section header
-    if (log.type === 'section' || (!log.message && log.title)) {
+    if (log.type === "section" || (!log.message && log.title)) {
       return (
         <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-300 font-semibold py-1">
           {log.title || rawMessage}
@@ -86,8 +90,8 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs, status }) => {
     }
 
     // Source URL
-    if (rawMessage.startsWith('URL: ')) {
-      const url = rawMessage.replace('URL: ', '').trim();
+    if (rawMessage.startsWith("URL: ")) {
+      const url = rawMessage.replace("URL: ", "").trim();
       let hostname = url;
       try {
         hostname = new URL(url).hostname;
@@ -111,19 +115,29 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs, status }) => {
     }
 
     // Crawl target
-    if (rawMessage.startsWith('Result: ')) {
+    if (rawMessage.startsWith("Result: ")) {
       return (
         <div className="text-xs text-zinc-300">
-          <span className="text-zinc-500 font-mono text-[11px] mr-1.5">RESULT</span>
-          <span className="font-medium text-zinc-200">{rawMessage.replace('Result: ', '')}</span>
+          <span className="text-zinc-500 font-mono text-[11px] mr-1.5">
+            RESULT
+          </span>
+          <span className="font-medium text-zinc-200">
+            {rawMessage.replace("Result: ", "")}
+          </span>
         </div>
       );
     }
 
     // Agent Internal Reasoning / Thoughts
-    if (rawMessage.startsWith('Thoughts: ') || rawMessage.startsWith('Reasoning: ')) {
-      const isThoughts = rawMessage.startsWith('Thoughts: ');
-      const content = rawMessage.replace(isThoughts ? 'Thoughts: ' : 'Reasoning: ', '');
+    if (
+      rawMessage.startsWith("Thoughts: ") ||
+      rawMessage.startsWith("Reasoning: ")
+    ) {
+      const isThoughts = rawMessage.startsWith("Thoughts: ");
+      const content = rawMessage.replace(
+        isThoughts ? "Thoughts: " : "Reasoning: ",
+        "",
+      );
       return (
         <div className="p-3 rounded-lg bg-zinc-900 border-l-2 border-zinc-600 border-y border-r border-white/[0.05] text-xs text-zinc-300 space-y-1">
           <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-medium">
@@ -135,38 +149,42 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs, status }) => {
     }
 
     // Agent Decision
-    if (rawMessage.startsWith('Decision: ')) {
+    if (rawMessage.startsWith("Decision: ")) {
       return (
         <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-zinc-800 border border-white/[0.08] text-xs font-mono text-zinc-300">
           <span className="text-zinc-500">DECISION:</span>
-          <span>{rawMessage.replace('Decision: ', '')}</span>
+          <span>{rawMessage.replace("Decision: ", "")}</span>
         </div>
       );
     }
 
     // Scraped content extract
-    if (rawMessage.startsWith('Summary: ')) {
+    if (rawMessage.startsWith("Summary: ")) {
       return (
         <div className="p-2.5 rounded-lg bg-zinc-900/60 border border-white/[0.05] text-xs text-zinc-400 font-mono leading-relaxed">
           <span className="text-zinc-500">EXTRACT: </span>
-          {rawMessage.replace('Summary: ', '')}
+          {rawMessage.replace("Summary: ", "")}
         </div>
       );
     }
 
     // Search query
-    if (rawMessage.startsWith('Searching for: ')) {
+    if (rawMessage.startsWith("Searching for: ")) {
       return (
         <div className="text-xs text-zinc-200 flex items-center gap-1.5">
           <span className="text-zinc-500 font-mono text-[11px]">QUERY</span>
           <span className="font-mono text-zinc-300">
-            {rawMessage.replace('Searching for: ', '')}
+            {rawMessage.replace("Searching for: ", "")}
           </span>
         </div>
       );
     }
 
-    return <span className="text-xs text-zinc-300 leading-relaxed">{rawMessage}</span>;
+    return (
+      <span className="text-xs text-zinc-300 leading-relaxed">
+        {rawMessage}
+      </span>
+    );
   };
 
   return (
@@ -189,31 +207,31 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs, status }) => {
         <div className="flex items-center gap-2">
           <div className="flex items-center bg-zinc-900 p-0.5 rounded-lg border border-white/[0.06] text-xs">
             <button
-              onClick={() => setFilter('all')}
+              onClick={() => setFilter("all")}
               className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer text-xs ${
-                filter === 'all'
-                  ? 'bg-zinc-800 text-zinc-100 font-medium'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                filter === "all"
+                  ? "bg-zinc-800 text-zinc-100 font-medium"
+                  : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
               All
             </button>
             <button
-              onClick={() => setFilter('reasoning')}
+              onClick={() => setFilter("reasoning")}
               className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer text-xs ${
-                filter === 'reasoning'
-                  ? 'bg-zinc-800 text-zinc-100 font-medium'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                filter === "reasoning"
+                  ? "bg-zinc-800 text-zinc-100 font-medium"
+                  : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
               Reasoning
             </button>
             <button
-              onClick={() => setFilter('sources')}
+              onClick={() => setFilter("sources")}
               className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer text-xs ${
-                filter === 'sources'
-                  ? 'bg-zinc-800 text-zinc-100 font-medium'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                filter === "sources"
+                  ? "bg-zinc-800 text-zinc-100 font-medium"
+                  : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
               Sources
@@ -227,7 +245,8 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs, status }) => {
               onClick={() => {
                 setAutoScroll(true);
                 if (containerRef.current) {
-                  containerRef.current.scrollTop = containerRef.current.scrollHeight;
+                  containerRef.current.scrollTop =
+                    containerRef.current.scrollHeight;
                 }
               }}
               leftIcon={<ArrowDown className="w-3 h-3" />}
@@ -251,7 +270,8 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs, status }) => {
                 Awaiting agent workflow initialization
               </p>
               <p className="text-[11px] text-zinc-500 max-w-xs">
-                Query decomposition and search execution events will stream here live.
+                Query decomposition and search execution events will stream here
+                live.
               </p>
             </div>
           ) : (
@@ -263,9 +283,9 @@ export const ResearchLog: React.FC<ResearchLogProps> = ({ logs, status }) => {
                 <div className="flex items-center justify-between text-[11px] text-zinc-500">
                   <span className="font-mono text-zinc-500">
                     {new Date(log.timestamp).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit',
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
                     })}
                   </span>
                   <span className="text-[10px] text-zinc-600 font-mono">

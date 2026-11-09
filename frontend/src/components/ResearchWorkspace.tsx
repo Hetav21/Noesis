@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { api, type ResearchJob } from '@/lib/api';
-import { ResearchLog } from '@/components/ResearchLog';
-import { ResearchResult } from '@/components/ResearchResult';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { api, type ResearchJob } from "@/lib/api";
+import { ResearchLog } from "@/components/ResearchLog";
+import { ResearchResult } from "@/components/ResearchResult";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
   Share2,
@@ -17,22 +17,24 @@ import {
   FileText,
   Activity,
   Columns2,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface ResearchWorkspaceProps {
   jobId: string;
 }
 
-type WorkspaceViewMode = 'report' | 'activity' | 'split';
+type WorkspaceViewMode = "report" | "activity" | "split";
 
-export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) => {
+export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
+  jobId,
+}) => {
   const router = useRouter();
   const [job, setJob] = useState<ResearchJob | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [viewMode, setViewMode] = useState<WorkspaceViewMode>('report');
-  const statusRef = useRef<string>('queued');
+  const [viewMode, setViewMode] = useState<WorkspaceViewMode>("report");
+  const statusRef = useRef<string>("queued");
 
   const fetchJob = useCallback(
     async (showLoading = false) => {
@@ -45,27 +47,27 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) =
         setError(null);
 
         // If job is still running, switch to activity view to observe progress
-        if (data.status === 'running' || data.status === 'queued') {
-          setViewMode((prev) => (prev === 'report' ? 'activity' : prev));
-        } else if (data.status === 'completed') {
+        if (data.status === "running" || data.status === "queued") {
+          setViewMode((prev) => (prev === "report" ? "activity" : prev));
+        } else if (data.status === "completed") {
           // Default to report view when completed
-          setViewMode((prev) => (prev === 'activity' ? 'report' : prev));
+          setViewMode((prev) => (prev === "activity" ? "report" : prev));
         }
       } catch (err: unknown) {
-        console.warn('Research job fetch notice:', err);
-        setError('Research session could not be retrieved.');
+        console.warn("Research job fetch notice:", err);
+        setError("Research session could not be retrieved.");
       } finally {
         if (showLoading) setIsLoading(false);
       }
     },
-    [jobId]
+    [jobId],
   );
 
   useEffect(() => {
     fetchJob(true);
 
     const interval = setInterval(() => {
-      if (statusRef.current === 'running' || statusRef.current === 'queued') {
+      if (statusRef.current === "running" || statusRef.current === "queued") {
         fetchJob(false);
       } else {
         clearInterval(interval);
@@ -81,31 +83,31 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) =
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
     } catch (err) {
-      console.error('Failed to copy share link', err);
+      console.error("Failed to copy share link", err);
     }
   };
 
   const getStatusBadge = (status?: string) => {
     switch (status) {
-      case 'completed':
+      case "completed":
         return (
           <Badge variant="success" dot>
             Completed
           </Badge>
         );
-      case 'running':
+      case "running":
         return (
           <Badge variant="warning" dot pulse>
             In Progress
           </Badge>
         );
-      case 'failed':
+      case "failed":
         return (
           <Badge variant="danger" dot>
             Failed
           </Badge>
         );
-      case 'queued':
+      case "queued":
       default:
         return (
           <Badge variant="neutral" dot pulse>
@@ -130,9 +132,12 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) =
     return (
       <div className="max-w-md mx-auto my-auto p-8 text-center space-y-5">
         <div className="space-y-1.5">
-          <h2 className="text-lg font-semibold text-zinc-100">Session Not Available</h2>
+          <h2 className="text-lg font-semibold text-zinc-100">
+            Session Not Available
+          </h2>
           <p className="text-xs text-zinc-400 leading-relaxed">
-            {error || 'This research session does not exist or has been removed.'}
+            {error ||
+              "This research session does not exist or has been removed."}
           </p>
         </div>
         <div className="flex items-center justify-center gap-2.5">
@@ -146,7 +151,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) =
           </Button>
           <Button
             size="sm"
-            onClick={() => router.push('/')}
+            onClick={() => router.push("/")}
             leftIcon={<ArrowLeft className="w-3.5 h-3.5" />}
           >
             Dashboard
@@ -156,7 +161,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) =
     );
   }
 
-  const isCompleted = job.status === 'completed';
+  const isCompleted = job.status === "completed";
 
   return (
     <div className="flex-1 flex flex-col max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -185,7 +190,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) =
                 )
               }
             >
-              {copiedLink ? 'Copied' : 'Share'}
+              {copiedLink ? "Copied" : "Share"}
             </Button>
           </div>
         </div>
@@ -197,12 +202,13 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) =
             <span className="text-[11px] text-zinc-500 font-mono flex items-center gap-1">
               <Clock className="w-3 h-3" />
               {new Date(job.created_at).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
+                hour: "2-digit",
+                minute: "2-digit",
               })}
             </span>
             <span className="text-[11px] text-zinc-500 font-mono">
-              • {job.depth} {job.depth === 1 ? 'round' : 'rounds'} • {job.breadth} sources/query
+              • {job.depth} {job.depth === 1 ? "round" : "rounds"} •{" "}
+              {job.breadth} sources/query
             </span>
           </div>
 
@@ -216,11 +222,11 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) =
               <div className="flex items-center gap-1 bg-zinc-900/90 p-1 rounded-xl border border-white/[0.06] text-xs">
                 <button
                   type="button"
-                  onClick={() => setViewMode('report')}
+                  onClick={() => setViewMode("report")}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-                    viewMode === 'report'
-                      ? 'bg-zinc-800 text-white shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                    viewMode === "report"
+                      ? "bg-zinc-800 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
                   <FileText className="w-3.5 h-3.5" />
@@ -228,11 +234,11 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) =
                 </button>
                 <button
                   type="button"
-                  onClick={() => setViewMode('activity')}
+                  onClick={() => setViewMode("activity")}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-                    viewMode === 'activity'
-                      ? 'bg-zinc-800 text-white shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                    viewMode === "activity"
+                      ? "bg-zinc-800 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
                   <Activity className="w-3.5 h-3.5" />
@@ -240,11 +246,11 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) =
                 </button>
                 <button
                   type="button"
-                  onClick={() => setViewMode('split')}
+                  onClick={() => setViewMode("split")}
                   className={`hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-                    viewMode === 'split'
-                      ? 'bg-zinc-800 text-white shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                    viewMode === "split"
+                      ? "bg-zinc-800 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
                   <Columns2 className="w-3.5 h-3.5" />
@@ -257,7 +263,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) =
       </div>
 
       {/* Main Content Area */}
-      {viewMode === 'report' ? (
+      {viewMode === "report" ? (
         /* Full-Width Editorial Report View */
         <div className="w-full">
           <ResearchResult
@@ -267,11 +273,11 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({ jobId }) =
             jobId={job.id}
             sourcesCount={job.logs?.length || 0}
             depth={job.depth}
-            onViewActivity={() => setViewMode('activity')}
+            onViewActivity={() => setViewMode("activity")}
             fullHeight={true}
           />
         </div>
-      ) : viewMode === 'activity' ? (
+      ) : viewMode === "activity" ? (
         /* Full-Width Activity Stream */
         <div className="w-full min-h-[600px] h-[calc(100vh-280px)]">
           <ResearchLog logs={job.logs || []} status={job.status} />

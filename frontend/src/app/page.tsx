@@ -1,25 +1,32 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
-import { ResearchForm } from '@/components/ResearchForm';
-import { RecentSessions } from '@/components/RecentSessions';
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
+import { ResearchForm } from "@/components/ResearchForm";
+import { RecentSessions } from "@/components/RecentSessions";
 
 export default function HomePage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (query: string, depth: number, breadth: number) => {
+  const handleSubmit = async (
+    query: string,
+    depth: number,
+    breadth: number,
+  ) => {
     setIsLoading(true);
     setError(null);
     try {
       const job = await api.createResearch({ query, depth, breadth });
       router.push(`/research/${job.id}`);
     } catch (err: unknown) {
-      console.error('Failed to create research job', err);
-      const msg = err instanceof Error ? err.message : 'Failed to launch research session';
+      console.error("Failed to create research job", err);
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Failed to launch research session";
       setError(msg);
       setIsLoading(false);
     }

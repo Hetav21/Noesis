@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React, { useEffect } from 'react';
-import { motion, stagger, useAnimate } from 'framer-motion';
-import { cn } from '@/lib/utils';
+import React, { useEffect } from "react";
+import { motion, stagger, useAnimate } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 export interface TextGenerateEffectProps {
   words: string;
@@ -25,32 +25,32 @@ export const TextGenerateEffect: React.FC<TextGenerateEffectProps> = ({
   delayOffset = 0,
 }) => {
   const [scope, animate] = useAnimate();
-  const wordsArray = words.split(' ');
+  const wordsArray = words.split(" ");
 
   useEffect(() => {
     if (scope.current) {
       animate(
-        'span',
+        "span",
         {
           opacity: 1,
-          filter: filter ? 'blur(0px)' : 'none',
+          filter: filter ? "blur(0px)" : "none",
         },
         {
           duration,
           delay: stagger(0.04, { startDelay: delayOffset }),
-        }
+        },
       );
     }
   }, [scope, animate, filter, duration, delayOffset, words]);
 
   return (
-    <span ref={scope} className={cn('inline', className)}>
+    <span ref={scope} className={cn("inline", className)}>
       {wordsArray.map((word, idx) => (
         <motion.span
           key={`${word}-${idx}`}
           className="inline-block opacity-0"
           style={{
-            filter: filter ? 'blur(8px)' : 'none',
+            filter: filter ? "blur(8px)" : "none",
           }}
         >
           {word}&nbsp;

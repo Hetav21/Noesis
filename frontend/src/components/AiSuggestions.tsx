@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw } from 'lucide-react';
+import React from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { RefreshCw } from "lucide-react";
 
 interface AiSuggestionsProps {
   suggestions: string[];
@@ -37,7 +37,7 @@ export const AiSuggestions: React.FC<AiSuggestionsProps> = ({
             transition={{
               duration: 0.18,
               delay: idx * 0.04,
-              ease: 'easeOut',
+              ease: "easeOut",
             }}
             whileTap={{ scale: 0.98 }}
             className="inline-flex items-center text-zinc-300 hover:text-zinc-100 bg-zinc-900/80 hover:bg-zinc-800/90 border border-white/[0.08] hover:border-white/20 px-2.5 py-1 rounded-lg transition-[background-color,border-color,color] cursor-pointer text-xs font-normal"
@@ -60,7 +60,7 @@ export const AiSuggestions: React.FC<AiSuggestionsProps> = ({
           aria-label="Shuffle suggestions"
         >
           <RefreshCw
-            className={`w-3 h-3 ${isLoading ? 'animate-spin text-zinc-400' : ''}`}
+            className={`w-3 h-3 ${isLoading ? "animate-spin text-zinc-400" : ""}`}
           />
         </motion.button>
       )}

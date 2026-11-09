@@ -1,4 +1,4 @@
-import { ResearchWorkspace } from '@/components/ResearchWorkspace';
+import { ResearchWorkspace } from "@/components/ResearchWorkspace";
 
 interface PageProps {
   params: Promise<{ id: string }>;

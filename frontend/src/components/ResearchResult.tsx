@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import React, { useState, useMemo } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { Button } from './ui/button';
+import React, { useState, useMemo } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+import { Button } from "./ui/button";
 import {
   Copy,
   Check,
@@ -13,7 +13,7 @@ import {
   Clock,
   ExternalLink,
   ListTree,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface ResearchResultProps {
   result: string | null;
@@ -54,7 +54,7 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy', err);
+      console.error("Failed to copy", err);
     }
   };
 
@@ -63,13 +63,13 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
     try {
       const sanitizedName = query
         .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/[^a-z0-9]+/g, "-")
         .slice(0, 40)
-        .replace(/^-|-$/g, '');
-      const filename = `research-${sanitizedName || 'report'}.md`;
-      const blob = new Blob([result], { type: 'text/markdown;charset=utf-8' });
+        .replace(/^-|-$/g, "");
+      const filename = `research-${sanitizedName || "report"}.md`;
+      const blob = new Blob([result], { type: "text/markdown;charset=utf-8" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
@@ -79,12 +79,14 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
       setDownloaded(true);
       setTimeout(() => setDownloaded(false), 2000);
     } catch (err) {
-      console.error('Failed to download', err);
+      console.error("Failed to download", err);
     }
   };
 
   return (
-    <Card className={`border-white/[0.08] ${fullHeight ? 'min-h-[500px]' : 'h-full flex flex-col min-h-0'}`}>
+    <Card
+      className={`border-white/[0.08] ${fullHeight ? "min-h-[500px]" : "h-full flex flex-col min-h-0"}`}
+    >
       <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 shrink-0">
         <div>
           <div className="flex items-center gap-2.5">
@@ -113,8 +115,8 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
               </span>
               <span>•</span>
               <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3 text-zinc-500" />
-                ~{stats.readTime} min read
+                <Clock className="w-3 h-3 text-zinc-500" />~{stats.readTime} min
+                read
               </span>
             </div>
           )}
@@ -135,7 +137,7 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
                 )
               }
             >
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? "Copied" : "Copy"}
             </Button>
             <Button
               variant="secondary"
@@ -149,18 +151,23 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
                 )
               }
             >
-              {downloaded ? 'Saved' : 'Export .md'}
+              {downloaded ? "Saved" : "Export .md"}
             </Button>
           </div>
         )}
       </CardHeader>
 
-      <CardContent className={`p-0 flex flex-col ${fullHeight ? '' : 'flex-1 min-h-0 overflow-hidden'}`}>
+      <CardContent
+        className={`p-0 flex flex-col ${fullHeight ? "" : "flex-1 min-h-0 overflow-hidden"}`}
+      >
         {/* Subtle Process Strip */}
         {result && onViewActivity && (
           <div className="px-6 py-2.5 bg-zinc-900/60 border-b border-white/[0.04] flex items-center justify-between text-xs text-zinc-400">
             <span className="font-mono text-[11px] text-zinc-400">
-              Researched across {depth} {depth === 1 ? 'round' : 'rounds'} • {sourcesCount > 0 ? `${sourcesCount} events recorded` : 'Multiple web sources'}
+              Researched across {depth} {depth === 1 ? "round" : "rounds"} •{" "}
+              {sourcesCount > 0
+                ? `${sourcesCount} events recorded`
+                : "Multiple web sources"}
             </span>
             <button
               type="button"
@@ -173,7 +180,9 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
           </div>
         )}
 
-        <div className={`p-6 sm:p-8 bg-[#0e0e11] ${fullHeight ? '' : 'flex-1 overflow-y-auto'}`}>
+        <div
+          className={`p-6 sm:p-8 bg-[#0e0e11] ${fullHeight ? "" : "flex-1 overflow-y-auto"}`}
+        >
           {result ? (
             <div className="markdown-body max-w-none">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -184,21 +193,21 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
             <div className="h-full min-h-[300px] flex flex-col items-center justify-center text-center p-6 space-y-3">
               <div className="space-y-1 max-w-sm">
                 <h4 className="font-medium text-zinc-300 text-sm">
-                  {status === 'running'
-                    ? 'Generating report...'
-                    : status === 'queued'
-                    ? 'In queue'
-                    : 'Report pending'}
+                  {status === "running"
+                    ? "Generating report..."
+                    : status === "queued"
+                      ? "In queue"
+                      : "Report pending"}
                 </h4>
                 <p className="text-xs text-zinc-500 leading-relaxed">
-                  {status === 'running'
-                    ? 'Synthesizing gathered search evidence into a structured markdown report.'
-                    : 'The final report will appear here once research completes.'}
+                  {status === "running"
+                    ? "Synthesizing gathered search evidence into a structured markdown report."
+                    : "The final report will appear here once research completes."}
                 </p>
               </div>
 
               {/* Minimal clean skeleton pulse */}
-              {status === 'running' && (
+              {status === "running" && (
                 <div className="w-full max-w-sm pt-4 space-y-2 opacity-30">
                   <div className="h-3 bg-zinc-700 rounded-full w-4/5 animate-pulse" />
                   <div className="h-3 bg-zinc-700 rounded-full w-full animate-pulse" />
