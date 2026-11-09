@@ -18,7 +18,8 @@ if not os.getenv("OPENAI_API_KEY"):
                 with open(secret_path, "r", encoding="utf-8") as f:
                     os.environ["OPENAI_API_KEY"] = f.read().strip()
                 break
-            except Exception:
+            except OSError:
+                # Ignore permission or file read errors when checking fallback secret paths
                 pass
 
 logger = logging.getLogger(__name__)
