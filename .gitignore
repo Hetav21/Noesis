@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 
 # Build outputs
+.next/
 dist/
 build/
 *.egg-info/
