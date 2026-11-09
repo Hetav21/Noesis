@@ -45,6 +45,7 @@ export interface ResearchJob {
   logs: LogEvent[];
   result: string | null;
   created_at: string;
+  is_owner?: boolean;
 }
 
 export const api = {
@@ -52,6 +53,7 @@ export const api = {
     const res = await fetch(`${getBaseUrl()}/research`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(config),
     });
     if (!res.ok) {
@@ -62,7 +64,9 @@ export const api = {
   },
 
   getResearch: async (jobId: string): Promise<ResearchJob> => {
-    const res = await fetch(`${getBaseUrl()}/research/${jobId}`);
+    const res = await fetch(`${getBaseUrl()}/research/${jobId}`, {
+      credentials: "include",
+    });
     if (!res.ok) {
       throw new Error("Research job not found");
     }
@@ -75,6 +79,9 @@ export const api = {
   ): Promise<ResearchJob[]> => {
     const res = await fetch(
       `${getBaseUrl()}/research?limit=${limit}&offset=${offset}`,
+      {
+        credentials: "include",
+      },
     );
     if (!res.ok) {
       throw new Error("Failed to list research jobs");
@@ -87,9 +94,11 @@ export const api = {
   ): Promise<{ status: string; id: string }> => {
     const res = await fetch(`${getBaseUrl()}/research/${jobId}`, {
       method: "DELETE",
+      credentials: "include",
     });
     if (!res.ok) {
-      throw new Error("Failed to delete research job");
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to delete research job");
     }
     return res.json();
   },
@@ -99,7 +108,9 @@ export const api = {
     service: string;
     timestamp: string;
   }> => {
-    const res = await fetch(`${getBaseUrl()}/health`);
+    const res = await fetch(`${getBaseUrl()}/health`, {
+      credentials: "include",
+    });
     if (!res.ok) {
       throw new Error("Backend health check failed");
     }
@@ -109,7 +120,9 @@ export const api = {
   getSuggestions: async (refresh: boolean = false): Promise<string[]> => {
     try {
       const url = `${getBaseUrl()}/suggestions${refresh ? "?refresh=true" : ""}`;
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        credentials: "include",
+      });
       if (!res.ok) return [];
       const data = await res.json();
       return Array.isArray(data.suggestions) ? data.suggestions : [];
