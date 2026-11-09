@@ -66,6 +66,23 @@ async_session = async_sessionmaker(engine, expire_on_commit=False)
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+        # Ensure new session and IP tracking columns exist on pre-existing tables
+        await conn.execute(
+            text("ALTER TABLE researchjob ADD COLUMN IF NOT EXISTS session_id VARCHAR;")
+        )
+        await conn.execute(
+            text("ALTER TABLE researchjob ADD COLUMN IF NOT EXISTS client_ip VARCHAR;")
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_researchjob_session_id ON researchjob (session_id);"
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_researchjob_client_ip ON researchjob (client_ip);"
+            )
+        )
 
 
 async def check_db_health() -> bool:

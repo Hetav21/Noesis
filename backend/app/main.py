@@ -12,8 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import desc, select
 
 from app.db import async_session, check_db_health, get_session, init_db
+from app.limiter import check_rate_limits
 from app.models import JobStatus, ResearchJob, ResearchJobCreate, ResearchJobRead
 from app.services.research import ResearchWorkflow
+from app.session import ClientIpDep, SessionIdDep
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
@@ -84,14 +86,28 @@ _suggestions_cache = {
 _suggestions_inflight: dict[str, asyncio.Task] = {}
 
 
+@app.get("/api/session/me")
+async def get_current_session(
+    session_id: SessionIdDep,
+    client_ip: ClientIpDep,
+):
+    """Return the current verified session identifier and client IP."""
+    return {
+        "session_id": session_id,
+        "client_ip": client_ip,
+    }
+
+
 @app.get("/api/suggestions")
 async def get_suggestions(
     db: SessionDep,
+    session_id: SessionIdDep,
     refresh: bool = Query(default=False),
 ):
     """
     Generate dynamic research suggestions based on previous research topics
-    using a fast, lightweight model (gpt-4o-mini). Cached by recent queries key.
+    belonging to the active session using a fast, lightweight model (gpt-4o-mini).
+    Cached by recent queries key.
     """
     import time
 
@@ -103,7 +119,10 @@ async def get_suggestions(
     ]
     try:
         result = await db.execute(
-            select(ResearchJob.query).order_by(desc(ResearchJob.created_at)).limit(6)
+            select(ResearchJob.query)
+            .where(ResearchJob.session_id == session_id)
+            .order_by(desc(ResearchJob.created_at))
+            .limit(6)
         )
         recent_queries = [r[0] for r in result.all() if r[0]]
         api_key = os.getenv("OPENAI_API_KEY")
@@ -270,11 +289,14 @@ async def run_research_task(job_id: str, query: str, depth: int, breadth: int):
 @app.get("/api/research", response_model=list[ResearchJobRead])
 async def list_research_jobs(
     db: SessionDep,
+    session_id: SessionIdDep,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
+    """List research jobs belonging exclusively to the current active session."""
     query = (
         select(ResearchJob)
+        .where(ResearchJob.session_id == session_id)
         .order_by(desc(ResearchJob.created_at))
         .offset(offset)
         .limit(limit)
@@ -291,6 +313,7 @@ async def list_research_jobs(
             result=job.result,
             created_at=job.created_at,
             logs=job.logs,
+            is_owner=True,
         )
         for job in jobs
     ]
@@ -301,10 +324,15 @@ async def create_research_job(
     research_job_create: ResearchJobCreate,
     background_tasks: BackgroundTasks,
     db: SessionDep,
+    session_id: SessionIdDep,
+    client_ip: ClientIpDep,
 ):
     query_text = research_job_create.query.strip()
     if not query_text:
         raise HTTPException(status_code=400, detail="Research query cannot be empty")
+
+    # Enforce concurrency cap and sliding window hourly rate limit
+    await check_rate_limits(db, session_id=session_id, client_ip=client_ip)
 
     depth = max(1, min(5, research_job_create.depth))
     breadth = max(2, min(10, research_job_create.breadth))
@@ -316,6 +344,8 @@ async def create_research_job(
         breadth=breadth,
         status=JobStatus.QUEUED,
         logs_json="[]",
+        session_id=session_id,
+        client_ip=client_ip,
     )
     db.add(db_job)
     await db.commit()
@@ -338,11 +368,17 @@ async def create_research_job(
         result=db_job.result,
         created_at=db_job.created_at,
         logs=db_job.logs,
+        is_owner=True,
     )
 
 
 @app.get("/api/research/{job_id}", response_model=ResearchJobRead)
-async def get_research_job(job_id: str, db: SessionDep):
+async def get_research_job(
+    job_id: str,
+    db: SessionDep,
+    session_id: SessionIdDep,
+):
+    """Retrieve research report. Shareable links allow reading by ID while reporting ownership."""
     result = await db.execute(select(ResearchJob).where(ResearchJob.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
@@ -361,15 +397,27 @@ async def get_research_job(job_id: str, db: SessionDep):
         result=job.result,
         created_at=job.created_at,
         logs=job.logs,
+        is_owner=(job.session_id == session_id),
     )
 
 
 @app.delete("/api/research/{job_id}")
-async def delete_research_job(job_id: str, db: SessionDep):
+async def delete_research_job(
+    job_id: str,
+    db: SessionDep,
+    session_id: SessionIdDep,
+):
     result = await db.execute(select(ResearchJob).where(ResearchJob.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Research job not found")
+
+    # Strict ownership check: prevent other sessions from deleting this research
+    if job.session_id and job.session_id != session_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: You do not have permission to delete this research session.",
+        )
 
     await db.delete(job)
     await db.commit()

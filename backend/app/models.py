@@ -25,6 +25,8 @@ class ResearchJob(ResearchJobBase, table=True):
     result: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     logs_json: str = Field(default="[]")  # Store logs as JSON string
+    session_id: str | None = Field(default=None, index=True)
+    client_ip: str | None = Field(default=None, index=True)
 
     @property
     def logs(self) -> list[dict[str, Any]]:
@@ -45,3 +47,4 @@ class ResearchJobRead(ResearchJobBase):
     result: str | None
     created_at: datetime
     logs: list[dict[str, Any]]
+    is_owner: bool = False

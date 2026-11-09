@@ -205,6 +205,14 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
         <div className="p-5 sm:p-6 rounded-2xl bg-[#121215] border border-white/[0.08] space-y-3">
           <div className="flex items-center gap-2.5 flex-wrap">
             {getStatusBadge(job.status)}
+            {job.is_owner === false && (
+              <Badge
+                variant="outline"
+                className="text-[10px] text-zinc-400 border-zinc-700 bg-zinc-900/50"
+              >
+                Shared report
+              </Badge>
+            )}
             <span className="text-[11px] text-zinc-500 font-mono flex items-center gap-1">
               <Clock className="w-3 h-3" />
               {new Date(job.created_at).toLocaleTimeString([], {
