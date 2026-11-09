@@ -67,6 +67,10 @@ async_session = async_sessionmaker(engine, expire_on_commit=False)
 async def init_db() -> None:
     """Initialize database tables and run idempotent migrations for session tracking."""
     async with engine.begin() as conn:
+        # Acquire transaction-scoped advisory lock to serialize startup schema changes across concurrent workers
+        if conn.dialect.name == "postgresql":
+            await conn.execute(text("SELECT pg_advisory_xact_lock(424242);"))
+
         await conn.run_sync(SQLModel.metadata.create_all)
         # Ensure new session and IP tracking columns exist on pre-existing tables
         await conn.execute(
