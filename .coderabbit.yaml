@@ -100,27 +100,27 @@ reviews:
     - "!**/dist/**"
 
   path_instructions:
-    - path: "backend/app/agents/**"
+    - path: "apps/agent/app/agents/**"
       instructions: |-
         AI Agent Architecture Guidelines:
         1. Keep prompt templates modular and externalized where possible.
         2. Validate model outputs using Pydantic schemas.
         3. Ensure model parameters (temperature, top_p, max_tokens) are configurable via `get_agent_settings`.
 
-    - path: "backend/app/services/**"
+    - path: "apps/agent/app/services/**"
       instructions: |-
         Research Engine & Tool Execution:
         1. Ensure external search tool failures are caught and logged gracefully without crashing the overall research synthesis.
         2. Wrap blocking external search calls in `asyncio.to_thread`.
         3. Maintain clean step logging to support real-time frontend job progress tracking.
 
-    - path: "backend/app/models.py"
+    - path: "apps/*/app/models.py"
       instructions: |-
         Data Models & Serialization:
         1. Maintain backward compatibility for serialized logs and job status fields.
         2. Use typed Pydantic models for request and response validation.
 
-    - path: "frontend/src/**"
+    - path: "apps/web/src/**"
       instructions: |-
         Frontend Application Guidelines:
         1. Maintain a clean, tactile design language.

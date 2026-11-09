@@ -19,8 +19,8 @@ from app.limiter import (
     register_active_workflow,
     unregister_active_workflow,
 )
+from app.dispatcher import dispatch_research_job
 from app.models import JobStatus, ResearchJob, ResearchJobCreate, ResearchJobRead
-from app.services.research import ResearchWorkflow
 from app.session import ClientIpDep, SessionIdDep
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -203,89 +203,18 @@ async def run_research_task(
     breadth: int,
     session_id: str | None = None,
     client_ip: str | None = None,
-):
-    """Execute autonomous multi-agent research pipeline in background task."""
+) -> None:
+    """Delegate research execution to the autonomous agent engine on Render."""
     register_active_workflow(job_id, session_id, client_ip)
-    session_factory = async_session
     try:
-        async with session_factory() as db:
-            try:
-                result = await db.execute(
-                    select(ResearchJob).where(ResearchJob.id == job_id)
-                )
-                job = result.scalar_one_or_none()
-                if not job:
-                    print(f"Job {job_id} not found")
-                    return
-
-                job.status = JobStatus.RUNNING
-                job.logs = [
-                    {
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "message": "Research started",
-                        "level": "info",
-                    }
-                ]
-                await db.commit()
-
-                async def log_callback(log_entry: dict):
-                    async with session_factory() as update_db:
-                        res = await update_db.execute(
-                            select(ResearchJob).where(ResearchJob.id == job_id)
-                        )
-                        curr_job = res.scalar_one_or_none()
-                        if curr_job:
-                            logs = curr_job.logs
-                            log_entry["timestamp"] = datetime.now(UTC).isoformat()
-                            logs.append(log_entry)
-                            curr_job.logs = logs
-                            await update_db.commit()
-
-                workflow = ResearchWorkflow(
-                    query=query, log_callback=log_callback, depth=depth, breadth=breadth
-                )
-                final_result = await workflow.research()
-
-                async with session_factory() as final_db:
-                    result = await final_db.execute(
-                        select(ResearchJob).where(ResearchJob.id == job_id)
-                    )
-                    job = result.scalar_one_or_none()
-                    if job:
-                        job.status = JobStatus.COMPLETED
-                        job.result = final_result
-                        logs = job.logs
-                        logs.append(
-                            {
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "message": "Research completed",
-                                "level": "success",
-                            }
-                        )
-                        job.logs = logs
-                        await final_db.commit()
-
-            except Exception as e:  # noqa: BLE001
-                print(f"Error in research task: {e}")
-                traceback.print_exc()
-                async with session_factory() as err_db:
-                    result = await err_db.execute(
-                        select(ResearchJob).where(ResearchJob.id == job_id)
-                    )
-                    job = result.scalar_one_or_none()
-                    if job:
-                        job.status = JobStatus.FAILED
-                        job.result = f"Error: {e!s}"
-                        logs = job.logs
-                        logs.append(
-                            {
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "message": f"Job failed: {e!s}",
-                                "level": "error",
-                            }
-                        )
-                        job.logs = logs
-                        await err_db.commit()
+        await dispatch_research_job(
+            job_id=job_id,
+            query=query,
+            depth=depth,
+            breadth=breadth,
+            session_id=session_id,
+            client_ip=client_ip,
+        )
     finally:
         unregister_active_workflow(job_id, session_id, client_ip)
 

@@ -1,0 +1,32 @@
+[project]
+name = "noesis-agent"
+version = "0.2.0"
+description = "Autonomous multi-agent research and synthesis engine"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "asyncpg>=0.32.0",
+    "beautifulsoup4>=4.15.0",
+    "ddgs>=9.16.1",
+    "fastapi>=0.162.2",
+    "greenlet>=3.5.6",
+    "httpx>=0.28.1",
+    "openai-agents>=0.24.0",
+    "pydantic>=2.14.3",
+    "python-dotenv>=1.2.4",
+    "requests>=2.34.2",
+    "sqlmodel>=0.0.48",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1.post1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

@@ -9,17 +9,25 @@ updates:
       - "dependencies"
 
   - package-ecosystem: "pip"
-    directory: "/backend"
+    directory: "/apps/api"
     schedule:
       interval: "weekly"
     labels:
-      - "area:backend"
+      - "area:api"
+      - "dependencies"
+
+  - package-ecosystem: "pip"
+    directory: "/apps/agent"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area:agent"
       - "dependencies"
 
   - package-ecosystem: "npm"
-    directory: "/frontend"
+    directory: "/apps/web"
     schedule:
       interval: "weekly"
     labels:
-      - "area:frontend"
+      - "area:web"
       - "dependencies"

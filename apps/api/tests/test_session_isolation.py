@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlmodel import select
 
 from app.db import async_session, init_db
 from app.main import app
