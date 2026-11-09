@@ -3,7 +3,11 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from app.dispatcher import dispatch_research_job, is_dispatch_configured
+from app.dispatcher import (
+    cancel_remote_job,
+    dispatch_research_job,
+    is_dispatch_configured,
+)
 
 
 @pytest.mark.asyncio
@@ -82,3 +86,34 @@ async def test_dispatch_handles_render_cold_start_gracefully(monkeypatch):
         )
         # Should not throw, returns False so caller knows delivery was queued in DB
         assert success is False
+
+
+@pytest.mark.asyncio
+async def test_cancel_remote_job(monkeypatch):
+    """When AGENT_SERVICE_URL is configured, cancel_remote_job posts json payload to /api/jobs/cancel."""
+    monkeypatch.setenv("AGENT_SERVICE_URL", "https://agent.test.local")
+    monkeypatch.setenv("AGENT_INTERNAL_SECRET", "test-secret-token")
+
+    mock_response = httpx.Response(
+        status_code=200,
+        json={"status": "cancelled", "job_id": "job-cancel-123"},
+        request=httpx.Request("POST", "https://agent.test.local/api/jobs/cancel"),
+    )
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+        success = await cancel_remote_job("job-cancel-123")
+        assert success is True
+        mock_post.assert_called_once()
+        call_kwargs = mock_post.call_args.kwargs
+        assert call_kwargs["json"] == {"job_id": "job-cancel-123"}
+        assert call_kwargs["headers"]["X-Internal-Secret"] == "test-secret-token"
+
+
+@pytest.mark.asyncio
+async def test_cancel_remote_job_unconfigured(monkeypatch):
+    """When AGENT_SERVICE_URL is unset, cancel_remote_job returns False immediately without request."""
+    monkeypatch.delenv("AGENT_SERVICE_URL", raising=False)
+    success = await cancel_remote_job("job-cancel-456")
+    assert success is False
+
