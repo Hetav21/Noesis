@@ -350,11 +350,30 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             </ol>
           ),
 
-          li: ({ children, ...props }) => (
-            <li className="text-zinc-300 marker:text-zinc-500" {...props}>
-              {children}
-            </li>
-          ),
+          li: ({ children, ...props }) => {
+            let sourceId: string | undefined;
+            if (Array.isArray(children) && children.length > 0) {
+              const first = children[0];
+              if (
+                React.isValidElement(first) &&
+                first.props &&
+                typeof (first.props as { href?: string }).href === "string" &&
+                (first.props as { href?: string }).href!.startsWith("#source-")
+              ) {
+                sourceId = (first.props as { href?: string }).href!.slice(1);
+              }
+            }
+
+            return (
+              <li
+                id={sourceId}
+                className={`text-zinc-300 marker:text-zinc-500 ${sourceId ? "scroll-mt-24 p-1 -ml-1 rounded transition-colors" : ""}`}
+                {...props}
+              >
+                {children}
+              </li>
+            );
+          },
 
           hr: ({ ...props }) => (
             <hr className="my-8 border-white/[0.08]" {...props} />

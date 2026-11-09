@@ -36,21 +36,27 @@ export default function ResearchRawPage({ params }: RawPageProps) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Smoothly scroll to anchor target once the report content is ready
+  // Smoothly scroll to anchor target once the report content is ready or on hashchange
   useEffect(() => {
     if (!job?.result || typeof window === "undefined") return;
-    const hash = window.location.hash;
-    if (!hash) return;
 
-    const timer = setTimeout(() => {
+    const scrollToHash = () => {
+      const hash = window.location.hash;
+      if (!hash) return;
       const targetId = decodeURIComponent(hash.slice(1));
       const targetEl = document.getElementById(targetId);
       if (targetEl) {
         targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
       }
-    }, 150);
+    };
 
-    return () => clearTimeout(timer);
+    const timer = setTimeout(scrollToHash, 200);
+    window.addEventListener("hashchange", scrollToHash);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("hashchange", scrollToHash);
+    };
   }, [job?.result]);
 
   const handleCopy = async () => {
