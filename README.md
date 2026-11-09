@@ -1,86 +1,126 @@
 # Deep Research Agent
 
-A web application that implements an iterative deep research workflow using a multi-agent system. It allows users to input a query, specify search depth and breadth, track the agent logs in real time, and view a synthesized final markdown report.
+A high-performance, portfolio-grade autonomous research platform powered by a multi-agent workflow. Built with **FastAPI**, **SQLModel (Async SQLite)**, **OpenAI Agents SDK**, and a modern **Next.js 16 (App Router)** interface crafted with a refined, tactile aesthetic (Linear / Vercel design language).
 
 ---
 
-## 1. Project Details & Features
+## 1. Overview & Capabilities
 
-* **Iterative Research Workflow**: The backend generates search queries based on the user's initial input, scrapes search results, analyzes them, and dynamically decides if further follow-up queries are needed (up to a configured depth limit).
-* **Multi-Agent System**: Utilizes specialized agents for query analysis, content summary, follow-up decisions, and final report synthesis.
-* **Real-Time Log Stream**: Polling interface showing live step-by-step progress of the research agents.
-* **Configurable Scope**: Allows setting the search **depth** (number of iterative research rounds) and **breadth** (number of search results to crawl per query).
+* **Iterative Deep Research Loop**: Autonomous orchestration breaks user queries into targeted sub-questions, executes web research, evaluates knowledge gaps, and iterates until the configured depth is satisfied.
+* **Specialized Multi-Agent Swarm**:
+  * **Query Agent**: Deconstructs high-level queries into diverse, orthogonal web search queries.
+  * **Search Agent**: Scrapes and synthesizes web content into concise factual evidence.
+  * **Follow-up Agent**: Critically evaluates accumulated findings against research goals to generate intelligent follow-up exploration tracks.
+  * **Synthesis Agent**: Produces an executive-level, citation-backed Markdown brief complete with structured sections, comparative tables, and strategic takeaways.
+* **Tactile, Modern Next.js Workspace**:
+  * Real-time polling agent event stream categorized by reasoning, queries, and scraped sources.
+  * Dynamic reading time, word count, and table-of-contents extraction.
+  * Preset research prompts, scope estimation indicators, session history archive, one-click Markdown download, and shareable link generation.
+  * Native dark-mode palette, subtle border glows, monospace telemetry badges, and zero generic template clutter.
 
 ---
 
-## 2. Start Commands
+## 2. Architecture
 
-### Prerequisites & Environment Setup
-Set up your environment variables by copying the example file:
-```bash
-cp backend/.env.example backend/.env
+```mermaid
+graph TD
+    A["Next.js App Router (Port 3001)"] -->|"1. Submit Research Job"| B("FastAPI Backend (Port 8000)")
+    B -->|"2. Initialize Session & State"| C[("SQLite Async (aiosqlite)")]
+    B -->|"3. Trigger Async Task"| D["Workflow Orchestrator"]
+    D -->|"4. Plan Search Vectors"| E["Query Agent"]
+    D -->|"5. Search & Scrape (Threaded DDGS)"| F["Web Search Engine"]
+    D -->|"6. Extract Factual Evidence"| G["Search Agent"]
+    D -->|"7. Knowledge Gap Analysis"| H["Follow-Up Agent"]
+    D -->|"8. Executive Synthesis"| I["Synthesis Agent"]
+    D -->|"9. Stream Logs & Final Brief"| C
+    A -->|"10. Poll State & Stream Logs"| B
 ```
-Edit `backend/.env` to include your `OPENAI_API_KEY`. You can also configure per-agent models and parameters, or override the `OPENAI_BASE_URL` if you are using an alternative provider.
 
-If you use Nix and `direnv`, running the following command in the project root will automatically load the correct versions of Python, Bun, SQLite, UV, and Node:
+---
+
+## 3. Technology Stack
+
+| Layer | Technologies |
+| :--- | :--- |
+| **Backend** | Python 3.11+, FastAPI 0.162+, OpenAI Agents SDK, SQLModel 0.0.48+, aiosqlite, DuckDuckGo Search |
+| **Frontend** | Next.js 16 (App Router), React 19, TypeScript 5.8+, Tailwind CSS 3.4, Lucide Icons, Canvas Confetti |
+| **Tooling & Dev** | Nix Flakes + Direnv, UV package manager, Bun runtime, Pytest + Pytest-Asyncio, ESLint |
+
+---
+
+## 4. Getting Started
+
+### Prerequisites
+
+Clone the repository and enter the directory:
+
+```bash
+git clone <repo-url>
+cd deep-research-agent
+```
+
+If you use **Nix** and **direnv**, dependencies (Python 3.11, UV, Bun, Node 20, SQLite, Playwright driver) and library paths are loaded automatically:
 ```bash
 direnv allow
 ```
 
-### Starting the Services
+### Environment Configuration
 
-#### Backend (FastAPI - Port 8000)
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-2. Start the server (runs SQLite initialization on startup):
-   ```bash
-   uv run uvicorn app.main:app --reload
-   ```
-
-#### Frontend (React + Vite - Port 5173)
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-2. Install dependencies:
-   ```bash
-   bun install
-   ```
-3. Start the dev server:
-   ```bash
-   bun dev
-   ```
+Configure backend credentials:
+```bash
+cp backend/.env.example backend/.env
+```
+Ensure `OPENAI_API_KEY` is provided in `backend/.env` (or available as an environment variable / `/run/secrets/openai_api_key`).
 
 ---
 
-## 3. Architecture
+### Running Locally
 
-```mermaid
-graph TD
-    A[React Frontend] -->|1. Submit Job| B(FastAPI Backend)
-    B -->|2. Queue Job & Write DB| C[(SQLite DB)]
-    B -->|3. Run Async Workflow| D[Research Workflow Manager]
-    D -->|4. Generate Queries| E[Query Agent]
-    D -->|5. DuckDuckGo Search| F[DuckDuckGo API]
-    D -->|6. Analyze Content| G[Search Agent]
-    D -->|7. Decide Follow-ups| H[Follow-Up Agent]
-    D -->|8. Synthesize Report| I[Synthesis Agent]
-    D -->|9. Write Logs & Report| C
-    A -->|10. Poll Logs & Result| B
+#### 1. Backend (FastAPI — Port 8000)
+```bash
+cd backend
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
+* Interactive API docs: `http://127.0.0.1:8000/docs`
+* Health check: `http://127.0.0.1:8000/api/health`
 
-### Backend
-* **FastAPI**: Exposes `/api/research` endpoints for creating and fetching job status/logs.
-* **SQLModel & aiosqlite**: Provides asynchronous SQLite database access for storing and retrieving research job states.
-* **OpenAI Agents SDK**: Orchestrates the agent group (models and parameters are fully configurable in `.env`, defaults to `gpt-4o-mini` and `gpt-4o`):
-  * **Query Agent**: Breaks down research goals into targeted search queries.
-  * **Search Agent**: Extracts and summarizes content from search results.
-  * **Follow-up Agent**: Evaluates if the current findings are sufficient or if more research is required.
-  * **Synthesis Agent**: Compiles all findings into a final cohesive markdown report.
+#### 2. Frontend (Next.js — Port 3001)
+```bash
+cd frontend
+bun install
+PORT=3001 bun run dev
+```
+Open [http://localhost:3001](http://localhost:3001) in your browser.
 
-### Frontend
-* **Vite + React 19 + TypeScript**: Fast frontend compilation and strict type safety.
-* **React Router v7**: Configured with `createBrowserRouter` to handle routing between the Homepage (form submission) and the Research details view.
-* **Tailwind CSS v4**: Utility-first CSS framework for styling.
+---
+
+## 5. API Reference
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/health` | Service health status and database liveness |
+| `POST` | `/api/research` | Submit a new research task (`query`, `depth`, `breadth`) |
+| `GET` | `/api/research` | List recent research sessions |
+| `GET` | `/api/research/{id}` | Fetch session status, live logs, and synthesized result |
+| `DELETE` | `/api/research/{id}` | Delete a research session and associated logs |
+
+---
+
+## 6. Testing & Quality Assurance
+
+Both backend and frontend are strictly typed and covered by automated test suites.
+
+### Backend Tests
+```bash
+cd backend
+uv run pytest
+```
+Runs tests covering configuration fallback, agent initializations, schema validations, and full REST API endpoint lifecycles.
+
+### Frontend Validation & Production Build
+```bash
+cd frontend
+bun run lint
+bun run build
+```
+Type checks all components, validates App Router metadata, and compiles optimized production assets.
