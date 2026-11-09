@@ -1,6 +1,14 @@
 const getBaseUrl = () => {
   if (typeof window !== "undefined") {
-    return process.env.NEXT_PUBLIC_API_URL || "/api";
+    // In browser, default to the same-site /api rewrite proxy so SameSite=Lax session cookies
+    // are transmitted reliably without cross-origin or third-party cookie restrictions.
+    if (
+      process.env.NEXT_PUBLIC_DIRECT_API === "true" &&
+      process.env.NEXT_PUBLIC_API_URL
+    ) {
+      return process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, "");
+    }
+    return "/api";
   }
   if (process.env.BACKEND_URL) {
     const raw = process.env.BACKEND_URL.replace(/\/+$/, "").replace(/\/api$/, "");
@@ -12,6 +20,27 @@ const getBaseUrl = () => {
   return "http://localhost:8000/api";
 };
 
+let sessionBootstrapPromise: Promise<void> | null = null;
+
+/**
+ * Ensures an authenticated session is established before issuing concurrent session-dependent requests.
+ * Eliminates races where simultaneous initial requests (e.g. list + suggestions) generate competing cookies.
+ */
+export const ensureSession = async (): Promise<void> => {
+  if (typeof window === "undefined") return;
+  if (!sessionBootstrapPromise) {
+    sessionBootstrapPromise = (async () => {
+      try {
+        await fetch(`${getBaseUrl()}/session/me`, {
+          credentials: "include",
+        });
+      } catch {
+        // Non-blocking fallback
+      }
+    })();
+  }
+  return sessionBootstrapPromise;
+};
 
 export interface ResearchConfig {
   query: string;
@@ -50,6 +79,7 @@ export interface ResearchJob {
 
 export const api = {
   createResearch: async (config: ResearchConfig): Promise<ResearchJob> => {
+    await ensureSession();
     const res = await fetch(`${getBaseUrl()}/research`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -64,6 +94,7 @@ export const api = {
   },
 
   getResearch: async (jobId: string): Promise<ResearchJob> => {
+    await ensureSession();
     const res = await fetch(`${getBaseUrl()}/research/${jobId}`, {
       credentials: "include",
     });
@@ -77,6 +108,7 @@ export const api = {
     limit: number = 20,
     offset: number = 0,
   ): Promise<ResearchJob[]> => {
+    await ensureSession();
     const res = await fetch(
       `${getBaseUrl()}/research?limit=${limit}&offset=${offset}`,
       {
@@ -92,6 +124,7 @@ export const api = {
   deleteResearch: async (
     jobId: string,
   ): Promise<{ status: string; id: string }> => {
+    await ensureSession();
     const res = await fetch(`${getBaseUrl()}/research/${jobId}`, {
       method: "DELETE",
       credentials: "include",
@@ -99,6 +132,19 @@ export const api = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "Failed to delete research job");
+    }
+    return res.json();
+  },
+
+  claimResearch: async (jobId: string): Promise<ResearchJob> => {
+    await ensureSession();
+    const res = await fetch(`${getBaseUrl()}/research/${jobId}/claim`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to claim research session");
     }
     return res.json();
   },
@@ -119,6 +165,7 @@ export const api = {
 
   getSuggestions: async (refresh: boolean = false): Promise<string[]> => {
     try {
+      await ensureSession();
       const url = `${getBaseUrl()}/suggestions${refresh ? "?refresh=true" : ""}`;
       const res = await fetch(url, {
         credentials: "include",

@@ -12,7 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import desc, select
 
 from app.db import async_session, check_db_health, get_session, init_db
-from app.limiter import check_rate_limits
+from app.limiter import (
+    check_rate_limits,
+    rate_limit_lock,
+    record_research_usage,
+    register_active_workflow,
+    unregister_active_workflow,
+)
 from app.models import JobStatus, ResearchJob, ResearchJobCreate, ResearchJobRead
 from app.services.research import ResearchWorkflow
 from app.session import ClientIpDep, SessionIdDep
@@ -22,6 +28,7 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """FastAPI lifespan context manager for startup table initialization."""
     await init_db()
     yield
 
@@ -68,6 +75,7 @@ app.add_middleware(
 @app.get("/health")
 @app.get("/api/health")
 async def health_check():
+    """Verify backend API liveness and PostgreSQL database connectivity."""
     db_ok = await check_db_health()
     return {
         "status": "ok" if db_ok else "degraded",
@@ -104,10 +112,10 @@ async def get_suggestions(
     session_id: SessionIdDep,
     refresh: bool = Query(default=False),
 ):
-    """
-    Generate dynamic research suggestions based on previous research topics
-    belonging to the active session using a fast, lightweight model (gpt-4o-mini).
-    Cached by recent queries key.
+    """Generate dynamic research suggestions based on previous research topics.
+
+    Scopes topics to the active session to avoid cross-user query exposure.
+    Cached by recent queries key for performance.
     """
     import time
 
@@ -129,7 +137,7 @@ async def get_suggestions(
         if not recent_queries or not api_key:
             return {"suggestions": default_suggestions}
 
-        cache_key = "|".join(recent_queries[:5])
+        cache_key = f"{session_id}:" + "|".join(recent_queries[:5])
         # Return cached suggestions if available and not explicitly refreshing
         if (
             not refresh
@@ -157,39 +165,23 @@ async def get_suggestions(
             try:
                 prompt = (
                     "The user previously researched these topics:\n"
-                    + "\n".join(f"- {q}" for q in recent_queries[:5])
-                    + "\n\nSuggest 4 high-value follow-up or related research inquiry titles (max 8 words each). "
-                    + 'Return ONLY a JSON array of strings, for example: ["Topic A", "Topic B", "Topic C", "Topic D"].'
+                    + "\n".join(f"- {q}" for q in recent_queries)
+                    + "\n\nSuggest 4 diverse, intriguing follow-up or adjacent research topics. "
+                    "Return ONLY a JSON array of 4 strings, no markdown, no commentary."
                 )
                 response = await client.chat.completions.create(
-                    model=os.getenv("QUERY_AGENT_MODEL", "gpt-4o-mini"),
+                    model="gpt-4o-mini",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.7,
-                    max_tokens=150,
                 )
-                content = (response.choices[0].message.content or "").strip()
-                clean = (
-                    content.strip()
-                    .removeprefix("```json")
-                    .removeprefix("```")
-                    .removesuffix("```")
-                    .strip()
-                )
-                parsed = json.loads(clean)
-                if isinstance(parsed, list):
-                    # Accept only nonblank strings
-                    valid_items = [
-                        s.strip() for s in parsed if isinstance(s, str) and s.strip()
-                    ]
-                    if valid_items:
-                        formatted = valid_items[:4]
-                        _suggestions_cache["key"] = cache_key
-                        _suggestions_cache["suggestions"] = formatted
-                        _suggestions_cache["timestamp"] = time.time()
-                        return formatted
-                return default_suggestions
-            finally:
-                await client.close()
+                content = response.choices[0].message.content or "[]"
+                cleaned = content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+                parsed = json.loads(cleaned)
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    return [str(p) for p in parsed[:4]]
+            except Exception as err:  # noqa: BLE001
+                print(f"Suggestions generation fallback note: {err}")
+            return default_suggestions
 
         task = asyncio.create_task(_generate_suggestions())
         _suggestions_inflight[cache_key] = task
@@ -204,86 +196,98 @@ async def get_suggestions(
     return {"suggestions": default_suggestions}
 
 
-async def run_research_task(job_id: str, query: str, depth: int, breadth: int):
+async def run_research_task(
+    job_id: str,
+    query: str,
+    depth: int,
+    breadth: int,
+    session_id: str | None = None,
+    client_ip: str | None = None,
+):
+    """Execute autonomous multi-agent research pipeline in background task."""
+    register_active_workflow(job_id, session_id, client_ip)
     session_factory = async_session
-    async with session_factory() as db:
-        try:
-            result = await db.execute(
-                select(ResearchJob).where(ResearchJob.id == job_id)
-            )
-            job = result.scalar_one_or_none()
-            if not job:
-                print(f"Job {job_id} not found")
-                return
+    try:
+        async with session_factory() as db:
+            try:
+                result = await db.execute(
+                    select(ResearchJob).where(ResearchJob.id == job_id)
+                )
+                job = result.scalar_one_or_none()
+                if not job:
+                    print(f"Job {job_id} not found")
+                    return
 
-            job.status = JobStatus.RUNNING
-            job.logs = [
-                {
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "message": "Research started",
-                    "level": "info",
-                }
-            ]
-            await db.commit()
+                job.status = JobStatus.RUNNING
+                job.logs = [
+                    {
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "message": "Research started",
+                        "level": "info",
+                    }
+                ]
+                await db.commit()
 
-            async def log_callback(log_entry: dict):
-                async with session_factory() as update_db:
-                    res = await update_db.execute(
+                async def log_callback(log_entry: dict):
+                    async with session_factory() as update_db:
+                        res = await update_db.execute(
+                            select(ResearchJob).where(ResearchJob.id == job_id)
+                        )
+                        curr_job = res.scalar_one_or_none()
+                        if curr_job:
+                            logs = curr_job.logs
+                            log_entry["timestamp"] = datetime.now(UTC).isoformat()
+                            logs.append(log_entry)
+                            curr_job.logs = logs
+                            await update_db.commit()
+
+                workflow = ResearchWorkflow(
+                    query=query, log_callback=log_callback, depth=depth, breadth=breadth
+                )
+                final_result = await workflow.research()
+
+                async with session_factory() as final_db:
+                    result = await final_db.execute(
                         select(ResearchJob).where(ResearchJob.id == job_id)
                     )
-                    curr_job = res.scalar_one_or_none()
-                    if curr_job:
-                        logs = curr_job.logs
-                        log_entry["timestamp"] = datetime.now(UTC).isoformat()
-                        logs.append(log_entry)
-                        curr_job.logs = logs
-                        await update_db.commit()
+                    job = result.scalar_one_or_none()
+                    if job:
+                        job.status = JobStatus.COMPLETED
+                        job.result = final_result
+                        logs = job.logs
+                        logs.append(
+                            {
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "message": "Research completed",
+                                "level": "success",
+                            }
+                        )
+                        job.logs = logs
+                        await final_db.commit()
 
-            workflow = ResearchWorkflow(
-                query=query, log_callback=log_callback, depth=depth, breadth=breadth
-            )
-            final_result = await workflow.research()
-
-            async with session_factory() as final_db:
-                result = await final_db.execute(
-                    select(ResearchJob).where(ResearchJob.id == job_id)
-                )
-                job = result.scalar_one_or_none()
-                if job:
-                    job.status = JobStatus.COMPLETED
-                    job.result = final_result
-                    logs = job.logs
-                    logs.append(
-                        {
-                            "timestamp": datetime.now(UTC).isoformat(),
-                            "message": "Research completed",
-                            "level": "success",
-                        }
+            except Exception as e:  # noqa: BLE001
+                print(f"Error in research task: {e}")
+                traceback.print_exc()
+                async with session_factory() as err_db:
+                    result = await err_db.execute(
+                        select(ResearchJob).where(ResearchJob.id == job_id)
                     )
-                    job.logs = logs
-                    await final_db.commit()
-
-        except Exception as e:  # noqa: BLE001
-            print(f"Error in research task: {e}")
-            traceback.print_exc()
-            async with session_factory() as err_db:
-                result = await err_db.execute(
-                    select(ResearchJob).where(ResearchJob.id == job_id)
-                )
-                job = result.scalar_one_or_none()
-                if job:
-                    job.status = JobStatus.FAILED
-                    job.result = f"Error: {e!s}"
-                    logs = job.logs
-                    logs.append(
-                        {
-                            "timestamp": datetime.now(UTC).isoformat(),
-                            "message": f"Job failed: {e!s}",
-                            "level": "error",
-                        }
-                    )
-                    job.logs = logs
-                    await err_db.commit()
+                    job = result.scalar_one_or_none()
+                    if job:
+                        job.status = JobStatus.FAILED
+                        job.result = f"Error: {e!s}"
+                        logs = job.logs
+                        logs.append(
+                            {
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "message": f"Job failed: {e!s}",
+                                "level": "error",
+                            }
+                        )
+                        job.logs = logs
+                        await err_db.commit()
+    finally:
+        unregister_active_workflow(job_id, session_id, client_ip)
 
 
 @app.get("/api/research", response_model=list[ResearchJobRead])
@@ -327,36 +331,45 @@ async def create_research_job(
     session_id: SessionIdDep,
     client_ip: ClientIpDep,
 ):
+    """Create and queue a new research job, enforcing concurrency and sliding-window rate limits."""
     query_text = research_job_create.query.strip()
     if not query_text:
         raise HTTPException(status_code=400, detail="Research query cannot be empty")
 
-    # Enforce concurrency cap and sliding window hourly rate limit
-    await check_rate_limits(db, session_id=session_id, client_ip=client_ip)
-
     depth = max(1, min(5, research_job_create.depth))
     breadth = max(2, min(10, research_job_create.breadth))
 
-    db_job = ResearchJob(
-        id=str(uuid.uuid4()),
-        query=query_text,
-        depth=depth,
-        breadth=breadth,
-        status=JobStatus.QUEUED,
-        logs_json="[]",
-        session_id=session_id,
-        client_ip=client_ip,
-    )
-    db.add(db_job)
-    await db.commit()
-    await db.refresh(db_job)
+    # Hold the lock through rate limit verification and job insertion to prevent races
+    async with rate_limit_lock:
+        await check_rate_limits(db, session_id=session_id, client_ip=client_ip)
+
+        db_job = ResearchJob(
+            id=str(uuid.uuid4()),
+            query=query_text,
+            depth=depth,
+            breadth=breadth,
+            status=JobStatus.QUEUED,
+            logs_json="[]",
+            session_id=session_id,
+            client_ip=client_ip,
+        )
+        db.add(db_job)
+        await record_research_usage(db, session_id=session_id, client_ip=client_ip)
+        await db.commit()
+        await db.refresh(db_job)
 
     job_id = db_job.id
     if job_id is None:
         raise HTTPException(status_code=500, detail="Failed to create job")
 
     background_tasks.add_task(
-        run_research_task, job_id, db_job.query, db_job.depth, db_job.breadth
+        run_research_task,
+        job_id,
+        db_job.query,
+        db_job.depth,
+        db_job.breadth,
+        session_id,
+        client_ip,
     )
 
     return ResearchJobRead(
@@ -407,13 +420,14 @@ async def delete_research_job(
     db: SessionDep,
     session_id: SessionIdDep,
 ):
+    """Delete a research session, strictly rejecting deletions without verified matching ownership."""
     result = await db.execute(select(ResearchJob).where(ResearchJob.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Research job not found")
 
-    # Strict ownership check: prevent other sessions from deleting this research
-    if job.session_id and job.session_id != session_id:
+    # Strict ownership check: prevent unowned reports or other sessions from deleting this research
+    if not job.session_id or job.session_id != session_id:
         raise HTTPException(
             status_code=403,
             detail="Forbidden: You do not have permission to delete this research session.",
@@ -422,3 +436,47 @@ async def delete_research_job(
     await db.delete(job)
     await db.commit()
     return {"status": "deleted", "id": job_id}
+
+
+@app.post("/api/research/{job_id}/claim", response_model=ResearchJobRead)
+async def claim_legacy_job(
+    job_id: str,
+    db: SessionDep,
+    session_id: SessionIdDep,
+):
+    """Claim an unassigned legacy research report for the current session.
+
+    Enables historical reports created prior to session isolation to be adopted
+    and managed by the claiming session without exposing them globally.
+    """
+    result = await db.execute(select(ResearchJob).where(ResearchJob.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Research job not found")
+
+    if job.session_id and job.session_id != session_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Report is already associated with another session.",
+        )
+
+    if not job.session_id:
+        job.session_id = session_id
+        await db.commit()
+        await db.refresh(job)
+
+    result_job_id = job.id
+    if result_job_id is None:
+        raise HTTPException(status_code=500, detail="Invalid job state")
+
+    return ResearchJobRead(
+        id=result_job_id,
+        query=job.query,
+        depth=job.depth,
+        breadth=job.breadth,
+        status=job.status,
+        result=job.result,
+        created_at=job.created_at,
+        logs=job.logs,
+        is_owner=True,
+    )
