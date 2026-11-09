@@ -11,6 +11,10 @@ from app.main import app
 @pytest.fixture(autouse=True)
 async def isolate_database():
     """Ensure PostgreSQL schema is initialized for tests and clean up test data."""
+    import os
+
+    os.environ["TESTING"] = "true"
+    os.environ["SESSION_SECRET"] = "test-session-secret-key-32-bytes-long-for-hmac"
     await init_db()
     yield
     async with async_session() as session:
