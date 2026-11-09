@@ -1,6 +1,5 @@
 import asyncio
 import os
-import traceback
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -11,7 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import desc, select
 
-from app.db import async_session, check_db_health, get_session, init_db
+from app.db import check_db_health, get_session, init_db
+from app.dispatcher import dispatch_research_job
 from app.limiter import (
     check_rate_limits,
     rate_limit_lock,
@@ -19,7 +19,6 @@ from app.limiter import (
     register_active_workflow,
     unregister_active_workflow,
 )
-from app.dispatcher import dispatch_research_job
 from app.models import JobStatus, ResearchJob, ResearchJobCreate, ResearchJobRead
 from app.session import ClientIpDep, SessionIdDep
 

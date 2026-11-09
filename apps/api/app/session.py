@@ -148,9 +148,7 @@ def is_secure_request(request: Request) -> bool:
         return True
     if request.url.scheme == "https":
         return True
-    if request.headers.get("x-forwarded-proto", "").lower() == "https":
-        return True
-    return False
+    return request.headers.get("x-forwarded-proto", "").lower() == "https"
 
 
 def set_signed_session_cookie(
