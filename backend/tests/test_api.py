@@ -2,34 +2,16 @@ from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlmodel import SQLModel
 
-from app.db import get_session, init_db
+from app.db import init_db
 from app.main import app
 
 
 @pytest.fixture(autouse=True)
 async def isolate_database():
-    """Use an isolated in-memory SQLite database for each test."""
-    test_engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        echo=False,
-        future=True,
-    )
-    async with test_engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-
-    test_session_maker = async_sessionmaker(test_engine, expire_on_commit=False)
-
-    async def override_get_session() -> AsyncSession:
-        async with test_session_maker() as session:
-            yield session
-
-    app.dependency_overrides[get_session] = override_get_session
+    """Ensure PostgreSQL schema is initialized for tests."""
+    await init_db()
     yield
-    app.dependency_overrides.clear()
-    await test_engine.dispose()
 
 
 @pytest.mark.asyncio

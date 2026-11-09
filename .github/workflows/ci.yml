@@ -51,6 +51,21 @@ jobs:
       run:
         working-directory: backend
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: noesis_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -72,6 +87,9 @@ jobs:
         continue-on-error: true
 
       - name: Run test suite
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgrespassword@localhost:5432/noesis_test
+          TESTING: "true"
         run: PYTHONPATH=. uv run --with pytest --with pytest-asyncio pytest -v
 
   frontend:

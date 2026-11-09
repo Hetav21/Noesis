@@ -6,10 +6,26 @@ import pytest
 from app.db import check_db_health, get_database_url, init_db
 
 
-def test_get_database_url_default():
-    with patch.dict(os.environ, {}, clear=True):
-        url = get_database_url()
-        assert url == "sqlite+aiosqlite:///./research.db"
+def test_get_database_url_missing():
+    with (
+        patch.dict(os.environ, {}, clear=True),
+        pytest.raises(
+            ValueError, match="DATABASE_URL environment variable is required"
+        ),
+    ):
+        get_database_url()
+
+
+def test_get_database_url_rejects_sqlite():
+    with (
+        patch.dict(
+            os.environ,
+            {"DATABASE_URL": "sqlite+aiosqlite:///./research.db"},
+            clear=True,
+        ),
+        pytest.raises(ValueError, match="Unsupported database scheme"),
+    ):
+        get_database_url()
 
 
 def test_get_database_url_postgres_prefix():

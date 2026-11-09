@@ -1,21 +1,32 @@
 import os
 from collections.abc import AsyncGenerator
 
+from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel, text
+
+load_dotenv()
 
 
 def get_database_url() -> str:
     raw_url = os.getenv("DATABASE_URL", "").strip()
     if not raw_url:
-        return "sqlite+aiosqlite:///./research.db"
+        raise ValueError(
+            "DATABASE_URL environment variable is required. Please configure a Neon PostgreSQL connection string."
+        )
 
     # Normalize standard PostgreSQL URL schemes for asyncpg compatibility
     if raw_url.startswith("postgres://"):
         raw_url = raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
     elif raw_url.startswith("postgresql://") and not raw_url.startswith("postgresql+"):
         raw_url = raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    if not raw_url.startswith("postgresql+asyncpg://"):
+        raise ValueError(
+            f"Unsupported database scheme: '{raw_url.split('://')[0]}'. "
+            "Only Neon PostgreSQL (postgresql+asyncpg://) is supported."
+        )
 
     # asyncpg expects 'ssl' instead of libpq's 'sslmode' query parameter
     if "sslmode=" in raw_url:
@@ -31,9 +42,7 @@ engine_kwargs: dict = {
     "future": True,
 }
 
-if DATABASE_URL.startswith("sqlite"):
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
-elif (
+if (
     "-pooler" in DATABASE_URL
     or os.getenv("DB_USE_NULL_POOL", "").lower() in ("true", "1")
     or os.getenv("TESTING", "").lower() in ("true", "1")

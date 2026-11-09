@@ -17,7 +17,6 @@
           uv
           nodejs_20
           bun
-          sqlite
           playwright-driver.browsers
         ];
 
