@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef } from "react";
-import { MarkdownRenderer } from "./MarkdownRenderer";
+import React, { useState, useMemo } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import {
@@ -44,25 +45,6 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
     const words = result.trim().split(/\s+/).filter(Boolean).length;
     const readTime = Math.max(1, Math.ceil(words / 220));
     return { words, readTime };
-  }, [result]);
-
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Smoothly scroll to hash if present in URL on mount / result load
-  useEffect(() => {
-    if (!result || typeof window === "undefined") return;
-    const hash = window.location.hash;
-    if (!hash) return;
-
-    const timer = setTimeout(() => {
-      const targetId = decodeURIComponent(hash.slice(1));
-      const targetEl = document.getElementById(targetId);
-      if (targetEl) {
-        targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }, 150);
-
-    return () => clearTimeout(timer);
   }, [result]);
 
   const handleCopy = async () => {
@@ -199,11 +181,14 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
         )}
 
         <div
-          ref={containerRef}
           className={`p-6 sm:p-8 bg-[#0e0e11] ${fullHeight ? "" : "flex-1 overflow-y-auto"}`}
         >
           {result ? (
-            <MarkdownRenderer content={result} />
+            <div className="markdown-body max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {result}
+              </ReactMarkdown>
+            </div>
           ) : (
             <div className="h-full min-h-[300px] flex flex-col items-center justify-center text-center p-6 space-y-3">
               <div className="space-y-1 max-w-sm">
