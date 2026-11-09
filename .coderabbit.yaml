@@ -26,6 +26,8 @@ reviews:
     drafts: false
     base_branches:
       - "main"
+      - "feat/*"
+      - "feat/**"
 
   pre_merge_checks:
     title:
