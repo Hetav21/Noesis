@@ -77,6 +77,7 @@ export interface ResearchJob {
   result: string | null;
   created_at: string;
   is_owner?: boolean;
+  is_public?: boolean;
 }
 
 export const api = {
@@ -101,7 +102,43 @@ export const api = {
       credentials: "include",
     });
     if (!res.ok) {
+      if (res.status === 404) {
+        throw new Error(
+          "This research session does not exist or is set to private by its author.",
+        );
+      }
       throw new Error("Research job not found");
+    }
+    return res.json();
+  },
+
+  updateVisibility: async (
+    jobId: string,
+    isPublic: boolean,
+  ): Promise<ResearchJob> => {
+    await ensureSession();
+    const res = await fetch(`${getBaseUrl()}/research/${jobId}/visibility`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ is_public: isPublic }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to update research visibility");
+    }
+    return res.json();
+  },
+
+  forkResearch: async (jobId: string): Promise<ResearchJob> => {
+    await ensureSession();
+    const res = await fetch(`${getBaseUrl()}/research/${jobId}/fork`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to import research session");
     }
     return res.json();
   },

@@ -2,11 +2,10 @@
 
 import React, { useEffect, useState, use } from "react";
 import Link from "next/link";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { api, type ResearchJob } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, Check, Download, Printer } from "lucide-react";
+import { ArrowLeft, Copy, Check, Download, Printer, ArrowUp } from "lucide-react";
 
 interface RawPageProps {
   params: Promise<{ id: string }>;
@@ -18,6 +17,7 @@ export default function ResearchRawPage({ params }: RawPageProps) {
   const [job, setJob] = useState<ResearchJob | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
     api
@@ -26,6 +26,32 @@ export default function ResearchRawPage({ params }: RawPageProps) {
       .catch((err) => console.warn("Could not load report in raw mode:", err))
       .finally(() => setIsLoading(false));
   }, [jobId]);
+
+  // Handle window scroll position for back to top button
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Smoothly scroll to anchor target once the report content is ready
+  useEffect(() => {
+    if (!job?.result || typeof window === "undefined") return;
+    const hash = window.location.hash;
+    if (!hash) return;
+
+    const timer = setTimeout(() => {
+      const targetId = decodeURIComponent(hash.slice(1));
+      const targetEl = document.getElementById(targetId);
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [job?.result]);
 
   const handleCopy = async () => {
     if (!job?.result) return;
@@ -157,11 +183,22 @@ export default function ResearchRawPage({ params }: RawPageProps) {
         </div>
 
         {/* Document Body */}
-        <article className="markdown-body pt-4 border-t border-white/[0.06] print:text-black print:border-zinc-200">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {job.result}
-          </ReactMarkdown>
+        <article className="pt-4 border-t border-white/[0.06] print:text-black print:border-zinc-200">
+          <MarkdownRenderer content={job.result} />
         </article>
+
+        {/* Floating Back to Top Button */}
+        {showScrollTop && (
+          <button
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="fixed bottom-6 right-6 p-2.5 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 shadow-lg backdrop-blur-sm transition-all print:hidden cursor-pointer"
+            title="Scroll to top"
+            aria-label="Scroll to top"
+          >
+            <ArrowUp className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </div>
   );

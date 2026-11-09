@@ -35,6 +35,10 @@
     border-color: var(--border);
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);
@@ -222,3 +226,48 @@
   border-color: rgba(255, 255, 255, 0.08);
   margin: 2rem 0;
 }
+
+/* Citation badge and interactive source references */
+.citation-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: super;
+  font-size: 0.675rem;
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  padding: 0.125rem 0.375rem;
+  margin: 0 0.15rem;
+  border-radius: 0.25rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e4e4e7;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  text-decoration: none !important;
+  cursor: pointer;
+  transition: all 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.citation-badge:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+:target {
+  animation: target-pulse 2s ease-out;
+}
+
+@keyframes target-pulse {
+  0% {
+    background-color: rgba(59, 130, 246, 0.18);
+    outline: 2px solid rgba(59, 130, 246, 0.4);
+    border-radius: 0.375rem;
+  }
+  100% {
+    background-color: transparent;
+    outline: 2px solid transparent;
+  }
+}
+

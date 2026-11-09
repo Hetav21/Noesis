@@ -34,6 +34,7 @@ class ResearchJob(ResearchJobBase, table=True):
     logs_json: str = Field(default="[]")  # Store logs as JSON string
     session_id: str | None = Field(default=None, index=True)
     client_ip: str | None = Field(default=None, index=True)
+    is_public: bool = Field(default=False, index=True)
 
     @property
     def logs(self) -> list[dict[str, Any]]:
@@ -50,6 +51,12 @@ class ResearchJobCreate(ResearchJobBase):
     """Payload schema for requesting a new research workflow."""
 
 
+class JobVisibilityUpdate(SQLModel):
+    """Payload schema for toggling public sharing on a research session."""
+
+    is_public: bool
+
+
 class ResearchJobRead(ResearchJobBase):
     """Response schema for returning a research job to clients."""
 
@@ -59,6 +66,7 @@ class ResearchJobRead(ResearchJobBase):
     created_at: datetime
     logs: list[dict[str, Any]]
     is_owner: bool = False
+    is_public: bool = False
 
 
 class ResearchUsage(SQLModel, table=True):

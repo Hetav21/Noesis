@@ -19,7 +19,13 @@ from app.limiter import (
     register_active_workflow,
     unregister_active_workflow,
 )
-from app.models import JobStatus, ResearchJob, ResearchJobCreate, ResearchJobRead
+from app.models import (
+    JobStatus,
+    JobVisibilityUpdate,
+    ResearchJob,
+    ResearchJobCreate,
+    ResearchJobRead,
+)
 from app.session import ClientIpDep, SessionIdDep, get_session_secret
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -257,6 +263,7 @@ async def list_research_jobs(
             created_at=job.created_at,
             logs=job.logs,
             is_owner=True,
+            is_public=job.is_public,
         )
         for job in jobs
     ]
@@ -297,6 +304,7 @@ async def create_research_job(
             logs_json="[]",
             session_id=session_id,
             client_ip=client_ip,
+            is_public=False,
         )
         db.add(db_job)
         await record_research_usage(db, session_id=session_id, client_ip=client_ip)
@@ -327,6 +335,7 @@ async def create_research_job(
         created_at=db_job.created_at,
         logs=db_job.logs,
         is_owner=True,
+        is_public=db_job.is_public,
     )
 
 
@@ -336,7 +345,7 @@ async def get_research_job(
     db: SessionDep,
     session_id: SessionIdDep,
 ):
-    """Retrieve research report. Shareable links allow reading by ID while reporting ownership."""
+    """Retrieve research report. Enforces privacy boundary: only owner or public links allowed."""
     result = await db.execute(select(ResearchJob).where(ResearchJob.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
@@ -345,6 +354,11 @@ async def get_research_job(
     result_job_id = job.id
     if result_job_id is None:
         raise HTTPException(status_code=500, detail="Invalid job state")
+
+    is_owner = (job.session_id == session_id)
+    if not job.is_public and not is_owner:
+        # Prevent ID enumeration: private jobs return 404 for unauthenticated callers
+        raise HTTPException(status_code=404, detail="Research job not found")
 
     return ResearchJobRead(
         id=result_job_id,
@@ -355,7 +369,8 @@ async def get_research_job(
         result=job.result,
         created_at=job.created_at,
         logs=job.logs,
-        is_owner=(job.session_id == session_id),
+        is_owner=is_owner,
+        is_public=job.is_public,
     )
 
 
@@ -439,4 +454,97 @@ async def claim_legacy_job(
         created_at=job.created_at,
         logs=job.logs,
         is_owner=True,
+        is_public=job.is_public,
+    )
+
+
+@app.patch("/api/research/{job_id}/visibility", response_model=ResearchJobRead)
+async def update_job_visibility(
+    job_id: str,
+    visibility_update: JobVisibilityUpdate,
+    db: SessionDep,
+    session_id: SessionIdDep,
+):
+    """Toggle public sharing for a research session. Strictly restricted to session owner."""
+    result = await db.execute(select(ResearchJob).where(ResearchJob.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Research job not found")
+
+    if not job.session_id or job.session_id != session_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: You do not have permission to modify sharing settings for this research.",
+        )
+
+    job.is_public = visibility_update.is_public
+    await db.commit()
+    await db.refresh(job)
+
+    result_job_id = job.id
+    if result_job_id is None:
+        raise HTTPException(status_code=500, detail="Invalid job state")
+
+    return ResearchJobRead(
+        id=result_job_id,
+        query=job.query,
+        depth=job.depth,
+        breadth=job.breadth,
+        status=job.status,
+        result=job.result,
+        created_at=job.created_at,
+        logs=job.logs,
+        is_owner=True,
+        is_public=job.is_public,
+    )
+
+
+@app.post("/api/research/{job_id}/fork", response_model=ResearchJobRead)
+async def fork_research_job(
+    job_id: str,
+    db: SessionDep,
+    session_id: SessionIdDep,
+    client_ip: ClientIpDep,
+):
+    """Import / fork an accessible research report into the caller's active session."""
+    result = await db.execute(select(ResearchJob).where(ResearchJob.id == job_id))
+    source_job = result.scalar_one_or_none()
+    if not source_job:
+        raise HTTPException(status_code=404, detail="Research job not found")
+
+    is_owner = (source_job.session_id == session_id)
+    if not source_job.is_public and not is_owner:
+        raise HTTPException(status_code=404, detail="Research job not found")
+
+    forked_job = ResearchJob(
+        id=str(uuid.uuid4()),
+        query=source_job.query,
+        depth=source_job.depth,
+        breadth=source_job.breadth,
+        status=source_job.status,
+        result=source_job.result,
+        logs_json=source_job.logs_json,
+        session_id=session_id,
+        client_ip=client_ip,
+        is_public=False,  # Forked copy is private by default in the new owner's session
+    )
+    db.add(forked_job)
+    await db.commit()
+    await db.refresh(forked_job)
+
+    result_job_id = forked_job.id
+    if result_job_id is None:
+        raise HTTPException(status_code=500, detail="Invalid job state")
+
+    return ResearchJobRead(
+        id=result_job_id,
+        query=forked_job.query,
+        depth=forked_job.depth,
+        breadth=forked_job.breadth,
+        status=forked_job.status,
+        result=forked_job.result,
+        created_at=forked_job.created_at,
+        logs=forked_job.logs,
+        is_owner=True,
+        is_public=forked_job.is_public,
     )
