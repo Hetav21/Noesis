@@ -50,9 +50,9 @@ class ResearchWorkflow:
 
     async def research(self) -> str:
         await self._log(
-            {"type": "status", "message": "Starting Deep Research Workflow..."}
+            {"type": "status", "message": "Starting research workflow..."}
         )
-        with trace("Deep Research Workflow"):
+        with trace("Noesis Research Workflow"):
             query_response = await self.generate_queries()
             await self.perform_research_for_queries(queries=query_response.queries)
 

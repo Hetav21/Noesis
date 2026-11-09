@@ -50,7 +50,7 @@ export default function ResearchRawPage({ params }: RawPageProps) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `research-${sanitized || "report"}.md`;
+    a.download = `noesis-${sanitized || "brief"}.md`;
     a.click();
     URL.revokeObjectURL(url);
   };

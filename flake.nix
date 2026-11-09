@@ -1,5 +1,5 @@
 {
-  description = "Deep Research Agent Development Environment";
+  description = "Noesis development environment";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -25,7 +25,7 @@
           export PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright-driver.browsers}
           export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
           export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ]}:''${LD_LIBRARY_PATH:-}"
-          echo "Deep Research Agent Environment Loaded"
+          echo "Noesis development environment loaded"
         '';
       };
     };
