@@ -1,14 +1,18 @@
 import logging
 import os
-from dotenv import load_dotenv
+
 from agents import ModelSettings
+from dotenv import load_dotenv
 
 # Load environment variables on startup
 load_dotenv()
 
 # Fallback to system secret if OPENAI_API_KEY not set in .env
 if not os.getenv("OPENAI_API_KEY"):
-    for secret_path in ["/run/secrets/openai_api_key", os.path.expanduser("~/.config/openai/key")]:
+    for secret_path in [
+        "/run/secrets/openai_api_key",
+        os.path.expanduser("~/.config/openai/key"),
+    ]:
         if os.path.exists(secret_path):
             try:
                 with open(secret_path, "r", encoding="utf-8") as f:
@@ -46,7 +50,7 @@ def get_agent_settings(prefix: str, default_model: str) -> tuple[str, ModelSetti
     If the env vars are not set or invalid, fall back to defaults.
     """
     model = os.getenv(f"{prefix}_MODEL", default_model)
-    
+
     temperature = os.getenv(f"{prefix}_TEMPERATURE")
     top_p = os.getenv(f"{prefix}_TOP_P")
     presence_penalty = os.getenv(f"{prefix}_PRESENCE_PENALTY")
@@ -65,7 +69,7 @@ def get_agent_settings(prefix: str, default_model: str) -> tuple[str, ModelSetti
         presence_penalty=to_float(presence_penalty),
         frequency_penalty=to_float(frequency_penalty),
         max_tokens=to_int(max_tokens),
-        extra_args=extra_args if extra_args else None
+        extra_args=extra_args if extra_args else None,
     )
-    
+
     return model, settings

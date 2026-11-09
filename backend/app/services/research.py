@@ -1,17 +1,19 @@
-import time
 import asyncio
-from typing import Callable, Any
-from pydantic import BaseModel
-from ddgs import DDGS
+import time
+from collections.abc import Callable
+from typing import Any
 
 # Assuming these are available in the backend.app.agents package
 from agents import Runner, trace
+from ddgs import DDGS
+from pydantic import BaseModel
+
 from app.agents.follow_up_agent import (
     FollowUpDecisionResponse,
     follow_up_decision_agent,
 )
-from app.agents.search_agent import search_agent
 from app.agents.query_agent import QueryResponse, query_agent
+from app.agents.search_agent import search_agent
 from app.agents.synthesis_agent import synthesis_agent
 
 
@@ -80,9 +82,7 @@ class ResearchWorkflow:
 
             final_report = await self.synthesis_report()
 
-            await self._log(
-                {"type": "success", "message": "Research complete!"}
-            )
+            await self._log({"type": "success", "message": "Research complete!"})
             await self._log({"type": "report", "content": final_report})
 
             return final_report
@@ -98,9 +98,7 @@ class ResearchWorkflow:
         await self._log(
             {"type": "info", "message": f"Thoughts: {result.final_output.thoughts}"}
         )
-        await self._log(
-            {"type": "info", "message": "Generated Search Queries:"}
-        )
+        await self._log({"type": "info", "message": "Generated Search Queries:"})
         for i, query in enumerate(result.final_output.queries, 1):
             await self._log({"type": "list_item", "message": f"{i}. {query}"})
 
@@ -147,7 +145,9 @@ class ResearchWorkflow:
         try:
             return await asyncio.to_thread(self._sync_ddgs_search, query)
         except Exception as ex:
-            await self._log({"type": "error", "message": f"Search error for '{query}': {str(ex)}"})
+            await self._log(
+                {"type": "error", "message": f"Search error for '{query}': {ex!s}"}
+            )
             return []
 
     async def perform_research_for_queries(self, queries: list[str]) -> None:
@@ -159,13 +159,14 @@ class ResearchWorkflow:
 
         for query in queries:
             results_for_query = all_search_results.get(query, [])
-            await self._log(
-                {"type": "info", "message": f"Searching for: {query}"}
-            )
+            await self._log({"type": "info", "message": f"Searching for: {query}"})
 
             if not results_for_query:
                 await self._log(
-                    {"type": "warning", "message": f"No search results returned for: {query}"}
+                    {
+                        "type": "warning",
+                        "message": f"No search results returned for: {query}",
+                    }
                 )
                 continue
 
@@ -173,12 +174,8 @@ class ResearchWorkflow:
                 await self._log(
                     {"type": "info", "message": f"Result: {result['title']}"}
                 )
-                await self._log(
-                    {"type": "info", "message": f"URL: {result['href']}"}
-                )
-                await self._log(
-                    {"type": "status", "message": "Analyzing content..."}
-                )
+                await self._log({"type": "info", "message": f"URL: {result['href']}"})
+                await self._log({"type": "status", "message": "Analyzing content..."})
 
                 start_analysis_time = time.time()
                 search_input = f"Title: {result['title']}\nURL: {result['href']}"
@@ -250,8 +247,6 @@ class ResearchWorkflow:
         if result.final_output.should_follow_up:
             await self._log({"type": "info", "message": "Follow-up Queries:"})
             for i, query in enumerate(result.final_output.queries, 1):
-                await self._log(
-                    {"type": "list_item", "message": f"{i}. {query}"}
-                )
+                await self._log({"type": "list_item", "message": f"{i}. {query}"})
 
         return result.final_output

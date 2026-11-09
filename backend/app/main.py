@@ -1,15 +1,13 @@
-import asyncio
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 import os
 import traceback
-from typing import List, Optional
 import uuid
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlmodel import select, desc
+from sqlmodel import desc, select
 
 from app.db import engine, get_session, init_db
 from app.models import JobStatus, ResearchJob, ResearchJobCreate, ResearchJobRead
@@ -57,7 +55,7 @@ async def health_check():
     return {
         "status": "ok",
         "service": "deep-research-agent",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -79,6 +77,7 @@ async def get_suggestions(
     using a fast, lightweight model (gpt-4o-mini). Cached by recent queries key.
     """
     import time
+
     default_suggestions = [
         "Solid-state vs sodium-ion battery commercial viability",
         "Post-quantum cryptography migration for TLS 1.3",
@@ -87,9 +86,7 @@ async def get_suggestions(
     ]
     try:
         result = await db.execute(
-            select(ResearchJob.query)
-            .order_by(desc(ResearchJob.created_at))
-            .limit(6)
+            select(ResearchJob.query).order_by(desc(ResearchJob.created_at)).limit(6)
         )
         recent_queries = [r[0] for r in result.all() if r[0]]
         api_key = os.getenv("OPENAI_API_KEY")
@@ -106,15 +103,16 @@ async def get_suggestions(
         ):
             return {"suggestions": _suggestions_cache["suggestions"]}
 
-        import openai
         import json
+
+        import openai
 
         client = openai.AsyncOpenAI(api_key=api_key)
         prompt = (
             "The user previously researched these topics:\n"
             + "\n".join(f"- {q}" for q in recent_queries[:5])
             + "\n\nSuggest 4 high-value follow-up or related research inquiry titles (max 8 words each). "
-            + "Return ONLY a JSON array of strings, for example: [\"Topic A\", \"Topic B\", \"Topic C\", \"Topic D\"]."
+            + 'Return ONLY a JSON array of strings, for example: ["Topic A", "Topic B", "Topic C", "Topic D"].'
         )
         response = await client.chat.completions.create(
             model=os.getenv("QUERY_AGENT_MODEL", "gpt-4o-mini"),
@@ -123,7 +121,13 @@ async def get_suggestions(
             max_tokens=150,
         )
         content = (response.choices[0].message.content or "").strip()
-        clean = content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        clean = (
+            content.strip()
+            .removeprefix("```json")
+            .removeprefix("```")
+            .removesuffix("```")
+            .strip()
+        )
         parsed = json.loads(clean)
         if isinstance(parsed, list) and len(parsed) > 0:
             formatted = [str(s).strip() for s in parsed[:4]]
@@ -152,7 +156,7 @@ async def run_research_task(job_id: str, query: str, depth: int, breadth: int):
             job.status = JobStatus.RUNNING
             job.logs = [
                 {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "message": "Research started",
                     "level": "info",
                 }
@@ -167,7 +171,7 @@ async def run_research_task(job_id: str, query: str, depth: int, breadth: int):
                     curr_job = res.scalar_one_or_none()
                     if curr_job:
                         logs = curr_job.logs
-                        log_entry["timestamp"] = datetime.now(timezone.utc).isoformat()
+                        log_entry["timestamp"] = datetime.now(UTC).isoformat()
                         logs.append(log_entry)
                         curr_job.logs = logs
                         await update_db.commit()
@@ -188,7 +192,7 @@ async def run_research_task(job_id: str, query: str, depth: int, breadth: int):
                     logs = job.logs
                     logs.append(
                         {
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "timestamp": datetime.now(UTC).isoformat(),
                             "message": "Research completed",
                             "level": "success",
                         }
@@ -206,12 +210,12 @@ async def run_research_task(job_id: str, query: str, depth: int, breadth: int):
                 job = result.scalar_one_or_none()
                 if job:
                     job.status = JobStatus.FAILED
-                    job.result = f"Error: {str(e)}"
+                    job.result = f"Error: {e!s}"
                     logs = job.logs
                     logs.append(
                         {
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                            "message": f"Job failed: {str(e)}",
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "message": f"Job failed: {e!s}",
                             "level": "error",
                         }
                     )
@@ -219,7 +223,7 @@ async def run_research_task(job_id: str, query: str, depth: int, breadth: int):
                     await err_db.commit()
 
 
-@app.get("/api/research", response_model=List[ResearchJobRead])
+@app.get("/api/research", response_model=list[ResearchJobRead])
 async def list_research_jobs(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),

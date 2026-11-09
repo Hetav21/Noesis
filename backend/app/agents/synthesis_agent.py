@@ -1,6 +1,8 @@
-from agents import Agent
-from app.config import get_agent_settings
 from pathlib import Path
+
+from agents import Agent
+
+from app.config import get_agent_settings
 
 PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "synthesis.md"
 with open(PROMPT_PATH, "r", encoding="utf-8") as f:
