@@ -79,13 +79,13 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "apps/api/requirements.txt"
+          cache-dependency-glob: "apps/api/uv.lock"
 
       - name: Install Python interpreter
         run: uv python install
 
       - name: Sync dependencies
-        run: uv pip install -r requirements.txt
+        run: uv sync --frozen || uv sync
 
       - name: Lint and format check (Ruff)
         run: uvx ruff check . --output-format=github
@@ -131,13 +131,13 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "apps/agent/requirements.txt"
+          cache-dependency-glob: "apps/agent/uv.lock"
 
       - name: Install Python interpreter
         run: uv python install
 
       - name: Sync dependencies
-        run: uv pip install -r requirements.txt
+        run: uv sync --frozen || uv sync
 
       - name: Lint and format check (Ruff)
         run: uvx ruff check . --output-format=github
