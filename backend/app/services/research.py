@@ -45,7 +45,7 @@ class ResearchWorkflow:
                 res = self.log_callback(entry)
                 if asyncio.iscoroutine(res):
                     await res
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print(f"Log callback error: {e}")
 
     async def research(self) -> str:

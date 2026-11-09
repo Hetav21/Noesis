@@ -1,8 +1,35 @@
+from unittest.mock import patch
+
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlmodel import SQLModel
 
-from app.db import init_db
+from app.db import get_session
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+async def isolate_database():
+    """Use an isolated in-memory SQLite database for each test."""
+    test_engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        echo=False,
+        future=True,
+    )
+    async with test_engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
+
+    test_session_maker = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    async def override_get_session() -> AsyncSession:
+        async with test_session_maker() as session:
+            yield session
+
+    app.dependency_overrides[get_session] = override_get_session
+    yield
+    app.dependency_overrides.clear()
+    await test_engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -16,12 +43,8 @@ async def test_health_check():
         assert data["service"] == "deep-research-agent"
 
 
-from unittest.mock import patch
-
-
 @pytest.mark.asyncio
 async def test_research_job_lifecycle():
-    await init_db()
     transport = ASGITransport(app=app)
     with patch("app.main.run_research_task"):
         async with AsyncClient(transport=transport, base_url="http://test") as client:

@@ -1,8 +1,10 @@
+import asyncio
 import os
 import traceback
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +14,8 @@ from sqlmodel import desc, select
 from app.db import engine, get_session, init_db
 from app.models import JobStatus, ResearchJob, ResearchJobCreate, ResearchJobRead
 from app.services.research import ResearchWorkflow
+
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 @asynccontextmanager
@@ -65,12 +69,13 @@ _suggestions_cache = {
     "suggestions": [],
     "timestamp": 0.0,
 }
+_suggestions_inflight: dict[str, asyncio.Task] = {}
 
 
 @app.get("/api/suggestions")
 async def get_suggestions(
+    db: SessionDep,
     refresh: bool = Query(default=False),
-    db: AsyncSession = Depends(get_session),
 ):
     """
     Generate dynamic research suggestions based on previous research topics
@@ -103,39 +108,66 @@ async def get_suggestions(
         ):
             return {"suggestions": _suggestions_cache["suggestions"]}
 
-        import json
+        # If a non-refresh request arrives while generation is already in-flight for this key, await it
+        if not refresh and cache_key in _suggestions_inflight:
+            try:
+                in_flight_res = await asyncio.shield(_suggestions_inflight[cache_key])
+                return {"suggestions": in_flight_res}
+            except Exception:  # noqa: BLE001, S110
+                # If the in-flight task was cancelled or failed, fall through to fresh generation
+                pass
 
-        import openai
+        async def _generate_suggestions() -> list[str]:
+            import json
 
-        client = openai.AsyncOpenAI(api_key=api_key)
-        prompt = (
-            "The user previously researched these topics:\n"
-            + "\n".join(f"- {q}" for q in recent_queries[:5])
-            + "\n\nSuggest 4 high-value follow-up or related research inquiry titles (max 8 words each). "
-            + 'Return ONLY a JSON array of strings, for example: ["Topic A", "Topic B", "Topic C", "Topic D"].'
-        )
-        response = await client.chat.completions.create(
-            model=os.getenv("QUERY_AGENT_MODEL", "gpt-4o-mini"),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=150,
-        )
-        content = (response.choices[0].message.content or "").strip()
-        clean = (
-            content.strip()
-            .removeprefix("```json")
-            .removeprefix("```")
-            .removesuffix("```")
-            .strip()
-        )
-        parsed = json.loads(clean)
-        if isinstance(parsed, list) and len(parsed) > 0:
-            formatted = [str(s).strip() for s in parsed[:4]]
-            _suggestions_cache["key"] = cache_key
-            _suggestions_cache["suggestions"] = formatted
-            _suggestions_cache["timestamp"] = time.time()
-            return {"suggestions": formatted}
-    except Exception as e:
+            import openai
+
+            client = openai.AsyncOpenAI(api_key=api_key)
+            try:
+                prompt = (
+                    "The user previously researched these topics:\n"
+                    + "\n".join(f"- {q}" for q in recent_queries[:5])
+                    + "\n\nSuggest 4 high-value follow-up or related research inquiry titles (max 8 words each). "
+                    + 'Return ONLY a JSON array of strings, for example: ["Topic A", "Topic B", "Topic C", "Topic D"].'
+                )
+                response = await client.chat.completions.create(
+                    model=os.getenv("QUERY_AGENT_MODEL", "gpt-4o-mini"),
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7,
+                    max_tokens=150,
+                )
+                content = (response.choices[0].message.content or "").strip()
+                clean = (
+                    content.strip()
+                    .removeprefix("```json")
+                    .removeprefix("```")
+                    .removesuffix("```")
+                    .strip()
+                )
+                parsed = json.loads(clean)
+                if isinstance(parsed, list):
+                    # Accept only nonblank strings
+                    valid_items = [
+                        s.strip() for s in parsed if isinstance(s, str) and s.strip()
+                    ]
+                    if valid_items:
+                        formatted = valid_items[:4]
+                        _suggestions_cache["key"] = cache_key
+                        _suggestions_cache["suggestions"] = formatted
+                        _suggestions_cache["timestamp"] = time.time()
+                        return formatted
+                return default_suggestions
+            finally:
+                await client.close()
+
+        task = asyncio.create_task(_generate_suggestions())
+        _suggestions_inflight[cache_key] = task
+        try:
+            generated = await task
+            return {"suggestions": generated}
+        finally:
+            _suggestions_inflight.pop(cache_key, None)
+    except Exception as e:  # noqa: BLE001
         print(f"Suggestions generation note: {e}")
 
     return {"suggestions": default_suggestions}
@@ -225,9 +257,9 @@ async def run_research_task(job_id: str, query: str, depth: int, breadth: int):
 
 @app.get("/api/research", response_model=list[ResearchJobRead])
 async def list_research_jobs(
+    db: SessionDep,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    db: AsyncSession = Depends(get_session),
 ):
     query = (
         select(ResearchJob)
@@ -256,7 +288,7 @@ async def list_research_jobs(
 async def create_research_job(
     research_job_create: ResearchJobCreate,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_session),
+    db: SessionDep,
 ):
     query_text = research_job_create.query.strip()
     if not query_text:
@@ -298,7 +330,7 @@ async def create_research_job(
 
 
 @app.get("/api/research/{job_id}", response_model=ResearchJobRead)
-async def get_research_job(job_id: str, db: AsyncSession = Depends(get_session)):
+async def get_research_job(job_id: str, db: SessionDep):
     result = await db.execute(select(ResearchJob).where(ResearchJob.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
@@ -321,7 +353,7 @@ async def get_research_job(job_id: str, db: AsyncSession = Depends(get_session))
 
 
 @app.delete("/api/research/{job_id}")
-async def delete_research_job(job_id: str, db: AsyncSession = Depends(get_session)):
+async def delete_research_job(job_id: str, db: SessionDep):
     result = await db.execute(select(ResearchJob).where(ResearchJob.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
