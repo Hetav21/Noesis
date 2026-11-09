@@ -6,6 +6,17 @@ from agents import ModelSettings
 # Load environment variables on startup
 load_dotenv()
 
+# Fallback to system secret if OPENAI_API_KEY not set in .env
+if not os.getenv("OPENAI_API_KEY"):
+    for secret_path in ["/run/secrets/openai_api_key", os.path.expanduser("~/.config/openai/key")]:
+        if os.path.exists(secret_path):
+            try:
+                with open(secret_path, "r", encoding="utf-8") as f:
+                    os.environ["OPENAI_API_KEY"] = f.read().strip()
+                break
+            except Exception:
+                pass
+
 logger = logging.getLogger(__name__)
 
 
