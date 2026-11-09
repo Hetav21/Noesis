@@ -61,10 +61,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
             prev.every((val, idx) => val === items[idx]);
           if (isSame) return prev;
           try {
-            sessionStorage.setItem(
-              "noesis_suggestions",
-              JSON.stringify(items),
-            );
+            sessionStorage.setItem("noesis_suggestions", JSON.stringify(items));
           } catch {
             // ignore
           }
