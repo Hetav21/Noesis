@@ -8,10 +8,10 @@ from typing import Annotated
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import desc, select
 
-from app.db import check_db_health, engine, get_session, init_db
+from app.db import async_session, check_db_health, get_session, init_db
 from app.models import JobStatus, ResearchJob, ResearchJobCreate, ResearchJobRead
 from app.services.research import ResearchWorkflow
 
@@ -186,7 +186,7 @@ async def get_suggestions(
 
 
 async def run_research_task(job_id: str, query: str, depth: int, breadth: int):
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    session_factory = async_session
     async with session_factory() as db:
         try:
             result = await db.execute(

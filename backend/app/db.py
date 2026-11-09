@@ -1,4 +1,5 @@
 import os
+import re
 from collections.abc import AsyncGenerator
 
 from dotenv import load_dotenv
@@ -29,8 +30,7 @@ def get_database_url() -> str:
         )
 
     # asyncpg expects 'ssl' instead of libpq's 'sslmode' query parameter
-    if "sslmode=" in raw_url:
-        raw_url = raw_url.replace("sslmode=", "ssl=")
+    raw_url = re.sub(r"([?&])sslmode=", r"\1ssl=", raw_url)
 
     return raw_url
 

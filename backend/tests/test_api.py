@@ -2,16 +2,20 @@ from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlmodel import text
 
-from app.db import init_db
+from app.db import async_session, init_db
 from app.main import app
 
 
 @pytest.fixture(autouse=True)
 async def isolate_database():
-    """Ensure PostgreSQL schema is initialized for tests."""
+    """Ensure PostgreSQL schema is initialized for tests and clean up test data."""
     await init_db()
     yield
+    async with async_session() as session:
+        await session.execute(text("DELETE FROM researchjob WHERE query LIKE 'Test%'"))
+        await session.commit()
 
 
 @pytest.mark.asyncio
