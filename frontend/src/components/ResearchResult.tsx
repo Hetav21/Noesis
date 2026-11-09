@@ -66,7 +66,7 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
         .replace(/[^a-z0-9]+/g, "-")
         .slice(0, 40)
         .replace(/^-|-$/g, "");
-      const filename = `research-${sanitizedName || "report"}.md`;
+      const filename = `noesis-${sanitizedName || "brief"}.md`;
       const blob = new Blob([result], { type: "text/markdown;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

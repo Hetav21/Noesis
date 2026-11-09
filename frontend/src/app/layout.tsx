@@ -3,8 +3,8 @@ import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 
 export const metadata: Metadata = {
-  title: "Deep Research",
-  description: "AI-assisted research reports synthesized from across the web.",
+  title: "Noesis",
+  description: "Autonomous multi-agent research and synthesis engine.",
 };
 
 export default function RootLayout({
@@ -19,7 +19,7 @@ export default function RootLayout({
         <main className="flex-1 flex flex-col">{children}</main>
         <footer className="border-t border-white/[0.06] py-6 px-4 text-xs text-zinc-500">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <span className="font-mono text-zinc-400">Deep Research</span>
+            <span className="font-mono text-zinc-400">Noesis</span>
             <span className="text-zinc-500">
               Made with care by{" "}
               <a

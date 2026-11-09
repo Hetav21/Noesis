@@ -36,7 +36,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
   // Restore cached suggestions from sessionStorage on client mount to eliminate initial flash
   useEffect(() => {
     try {
-      const cached = sessionStorage.getItem("deep_research_suggestions");
+      const cached = sessionStorage.getItem("noesis_suggestions");
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -62,7 +62,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
           if (isSame) return prev;
           try {
             sessionStorage.setItem(
-              "deep_research_suggestions",
+              "noesis_suggestions",
               JSON.stringify(items),
             );
           } catch {

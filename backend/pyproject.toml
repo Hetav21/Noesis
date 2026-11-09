@@ -1,7 +1,7 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Deep Research Multi-Agent Backend Service"
+description = "Noesis autonomous multi-agent research engine"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

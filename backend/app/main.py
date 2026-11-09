@@ -25,8 +25,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Deep Research Agent API",
-    description="Multi-agent iterative deep research workflow service",
+    title="Noesis API",
+    description="Autonomous multi-agent research and synthesis engine",
     version="0.2.0",
     lifespan=lifespan,
 )
@@ -58,7 +58,7 @@ app.add_middleware(
 async def health_check():
     return {
         "status": "ok",
-        "service": "deep-research-agent",
+        "service": "noesis",
         "timestamp": datetime.now(UTC).isoformat(),
     }
 
