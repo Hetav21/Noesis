@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
-import { Button } from './ui/button';
-import { AiSuggestions } from './AiSuggestions';
-import { ArrowUp, SlidersHorizontal, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { api } from "@/lib/api";
+import { Button } from "./ui/button";
+import { AiSuggestions } from "./AiSuggestions";
+import { ArrowUp, SlidersHorizontal, ChevronDown } from "lucide-react";
 
 interface ResearchFormProps {
   onSubmit: (query: string, depth: number, breadth: number) => void;
@@ -12,17 +12,20 @@ interface ResearchFormProps {
 }
 
 const DEFAULT_SUGGESTIONS = [
-  'Solid-state vs sodium-ion battery commercial viability',
-  'Post-quantum cryptography migration for TLS 1.3',
-  'Agentic orchestration patterns vs deterministic DAGs',
-  'WebAssembly component model in serverless runtimes',
+  "Solid-state vs sodium-ion battery commercial viability",
+  "Post-quantum cryptography migration for TLS 1.3",
+  "Agentic orchestration patterns vs deterministic DAGs",
+  "WebAssembly component model in serverless runtimes",
 ];
 
-type DepthPreset = 'quick' | 'standard' | 'deep' | 'custom';
+type DepthPreset = "quick" | "standard" | "deep" | "custom";
 
-export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading }) => {
-  const [query, setQuery] = useState('');
-  const [preset, setPreset] = useState<DepthPreset>('standard');
+export const ResearchForm: React.FC<ResearchFormProps> = ({
+  onSubmit,
+  isLoading,
+}) => {
+  const [query, setQuery] = useState("");
+  const [preset, setPreset] = useState<DepthPreset>("standard");
   const [depth, setDepth] = useState<number>(2);
   const [breadth, setBreadth] = useState<number>(4);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -33,7 +36,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
   // Restore cached suggestions from sessionStorage on client mount to eliminate initial flash
   useEffect(() => {
     try {
-      const cached = sessionStorage.getItem('deep_research_suggestions');
+      const cached = sessionStorage.getItem("deep_research_suggestions");
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -58,7 +61,10 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
             prev.every((val, idx) => val === items[idx]);
           if (isSame) return prev;
           try {
-            sessionStorage.setItem('deep_research_suggestions', JSON.stringify(items));
+            sessionStorage.setItem(
+              "deep_research_suggestions",
+              JSON.stringify(items),
+            );
           } catch {
             // ignore
           }
@@ -66,7 +72,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
         });
       }
     } catch (err) {
-      console.warn('Failed to refresh suggestions', err);
+      console.warn("Failed to refresh suggestions", err);
     } finally {
       isFetchingRef.current = false;
       setIsRefreshingSuggestions(false);
@@ -80,19 +86,19 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
 
   const handlePresetSelect = (p: DepthPreset) => {
     setPreset(p);
-    if (p === 'quick') {
+    if (p === "quick") {
       setDepth(1);
       setBreadth(3);
       setShowAdvanced(false);
-    } else if (p === 'standard') {
+    } else if (p === "standard") {
       setDepth(2);
       setBreadth(4);
       setShowAdvanced(false);
-    } else if (p === 'deep') {
+    } else if (p === "deep") {
       setDepth(3);
       setBreadth(6);
       setShowAdvanced(false);
-    } else if (p === 'custom') {
+    } else if (p === "custom") {
       setShowAdvanced(true);
     }
   };
@@ -115,7 +121,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSubmit(e);
               }
@@ -132,39 +138,48 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
               <div className="flex items-center gap-1 bg-zinc-900/90 p-0.5 rounded-lg border border-white/[0.06]">
                 <button
                   type="button"
-                  onClick={() => handlePresetSelect('quick')}
+                  onClick={() => handlePresetSelect("quick")}
                   disabled={isLoading}
                   className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                    preset === 'quick' && !showAdvanced
-                      ? 'bg-zinc-800 text-zinc-100 shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                    preset === "quick" && !showAdvanced
+                      ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  Quick <span className="text-[10px] text-zinc-500 hidden sm:inline ml-1">1 round</span>
+                  Quick{" "}
+                  <span className="text-[10px] text-zinc-500 hidden sm:inline ml-1">
+                    1 round
+                  </span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handlePresetSelect('standard')}
+                  onClick={() => handlePresetSelect("standard")}
                   disabled={isLoading}
                   className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                    preset === 'standard' && !showAdvanced
-                      ? 'bg-zinc-800 text-zinc-100 shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                    preset === "standard" && !showAdvanced
+                      ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  Standard <span className="text-[10px] text-zinc-500 hidden sm:inline ml-1">2 rounds</span>
+                  Standard{" "}
+                  <span className="text-[10px] text-zinc-500 hidden sm:inline ml-1">
+                    2 rounds
+                  </span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handlePresetSelect('deep')}
+                  onClick={() => handlePresetSelect("deep")}
                   disabled={isLoading}
                   className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                    preset === 'deep' && !showAdvanced
-                      ? 'bg-zinc-800 text-zinc-100 shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                    preset === "deep" && !showAdvanced
+                      ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  Deep <span className="text-[10px] text-zinc-500 hidden sm:inline ml-1">3 rounds</span>
+                  Deep{" "}
+                  <span className="text-[10px] text-zinc-500 hidden sm:inline ml-1">
+                    3 rounds
+                  </span>
                 </button>
               </div>
 
@@ -173,20 +188,20 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
                 type="button"
                 onClick={() => {
                   setShowAdvanced(!showAdvanced);
-                  if (!showAdvanced) setPreset('custom');
+                  if (!showAdvanced) setPreset("custom");
                 }}
                 disabled={isLoading}
                 className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
                   showAdvanced
-                    ? 'bg-zinc-800 border-white/20 text-zinc-100'
-                    : 'bg-zinc-900/70 border-white/[0.06] text-zinc-400 hover:text-zinc-200'
+                    ? "bg-zinc-800 border-white/20 text-zinc-100"
+                    : "bg-zinc-900/70 border-white/[0.06] text-zinc-400 hover:text-zinc-200"
                 }`}
               >
                 <SlidersHorizontal className="w-3 h-3" />
                 <span>Advanced</span>
                 <ChevronDown
                   className={`w-3 h-3 transition-transform duration-150 ${
-                    showAdvanced ? 'rotate-180' : ''
+                    showAdvanced ? "rotate-180" : ""
                   }`}
                 />
               </button>
@@ -216,11 +231,16 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
                 {/* Custom Depth Slider + Manual Input */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <label htmlFor="depth-input" className="text-zinc-200 font-medium">
+                    <label
+                      htmlFor="depth-input"
+                      className="text-zinc-200 font-medium"
+                    >
                       Follow-up Rounds (Depth)
                     </label>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-zinc-500 font-mono">1 – 5</span>
+                      <span className="text-[11px] text-zinc-500 font-mono">
+                        1 – 5
+                      </span>
                       <input
                         id="depth-input"
                         type="number"
@@ -231,7 +251,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
                           const val = parseInt(e.target.value, 10);
                           if (!isNaN(val)) {
                             setDepth(Math.min(5, Math.max(1, val)));
-                            setPreset('custom');
+                            setPreset("custom");
                           }
                         }}
                         className="w-12 px-2 py-0.5 text-center font-mono text-xs bg-zinc-900 border border-white/[0.12] rounded-md text-white focus:outline-none focus:border-zinc-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -247,7 +267,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
                       value={depth}
                       onChange={(e) => {
                         setDepth(Number(e.target.value));
-                        setPreset('custom');
+                        setPreset("custom");
                       }}
                       className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-200"
                     />
@@ -258,18 +278,24 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
                     <span>5 (Comprehensive)</span>
                   </div>
                   <p className="text-[10px] text-zinc-500 leading-relaxed">
-                    Controls how many iterative re-query and evidence evaluation cycles are executed.
+                    Controls how many iterative re-query and evidence evaluation
+                    cycles are executed.
                   </p>
                 </div>
 
                 {/* Custom Breadth Slider + Manual Input */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <label htmlFor="breadth-input" className="text-zinc-200 font-medium">
+                    <label
+                      htmlFor="breadth-input"
+                      className="text-zinc-200 font-medium"
+                    >
                       Sources per Query (Breadth)
                     </label>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-zinc-500 font-mono">2 – 15</span>
+                      <span className="text-[11px] text-zinc-500 font-mono">
+                        2 – 15
+                      </span>
                       <input
                         id="breadth-input"
                         type="number"
@@ -280,7 +306,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
                           const val = parseInt(e.target.value, 10);
                           if (!isNaN(val)) {
                             setBreadth(Math.min(15, Math.max(2, val)));
-                            setPreset('custom');
+                            setPreset("custom");
                           }
                         }}
                         className="w-12 px-2 py-0.5 text-center font-mono text-xs bg-zinc-900 border border-white/[0.12] rounded-md text-white focus:outline-none focus:border-zinc-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -296,7 +322,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
                       value={breadth}
                       onChange={(e) => {
                         setBreadth(Number(e.target.value));
-                        setPreset('custom');
+                        setPreset("custom");
                       }}
                       className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-200"
                     />
@@ -307,7 +333,8 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({ onSubmit, isLoading 
                     <span>15 sources</span>
                   </div>
                   <p className="text-[10px] text-zinc-500 leading-relaxed">
-                    Maximum live web results scraped and analyzed for each generated sub-query.
+                    Maximum live web results scraped and analyzed for each
+                    generated sub-query.
                   </p>
                 </div>
               </div>
