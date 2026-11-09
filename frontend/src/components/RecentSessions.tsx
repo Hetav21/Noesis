@@ -13,13 +13,15 @@ export const RecentSessions: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const deletedIdsRef = React.useRef<Set<string>>(new Set());
 
   const loadJobs = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const data = await api.listResearch(15, 0);
-      setJobs(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setJobs(list.filter((j) => !deletedIdsRef.current.has(j.id)));
     } catch (err) {
       console.warn("Failed to load recent sessions", err);
       setError(
@@ -39,11 +41,14 @@ export const RecentSessions: React.FC = () => {
     e.stopPropagation();
     if (confirm("Delete this research session?")) {
       setIsDeleting(id);
+      deletedIdsRef.current.add(id);
       try {
         await api.deleteResearch(id);
         setJobs((prev) => prev.filter((j) => j.id !== id));
       } catch (err) {
+        deletedIdsRef.current.delete(id);
         console.error("Failed to delete job", err);
+        setError("Failed to delete research session. Please try again.");
       } finally {
         setIsDeleting(null);
       }

@@ -6,5 +6,5 @@ interface PageProps {
 
 export default async function ResearchDetailPage({ params }: PageProps) {
   const resolved = await params;
-  return <ResearchWorkspace jobId={resolved.id} />;
+  return <ResearchWorkspace key={resolved.id} jobId={resolved.id} />;
 }
