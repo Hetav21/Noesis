@@ -134,7 +134,7 @@ async def run_research_task(
                 await cancel_db.commit()
         raise
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"[Agent] Error in research task {job_id}: {e}")
         traceback.print_exc()
         async with session_factory() as err_db:
@@ -188,7 +188,7 @@ async def queue_worker_loop():
                     _active_jobs[job.id] = task
         except asyncio.CancelledError:
             break
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"[Agent Worker] Polling loop error: {e}")
             await asyncio.sleep(5)
 

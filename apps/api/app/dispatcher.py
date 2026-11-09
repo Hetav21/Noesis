@@ -1,6 +1,5 @@
 import asyncio
 import os
-from typing import Any
 
 import httpx
 
@@ -64,7 +63,7 @@ async def dispatch_research_job(
                     "Job remains QUEUED in database for worker pickup."
                 )
                 return False
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Render cold start or network delay: job is safely QUEUED in Neon PostgreSQL
             print(
                 f"[Dispatcher] Note: Agent dispatch webhook did not acknowledge ({e}). "
@@ -79,12 +78,15 @@ async def dispatch_research_job(
         try:
             # Optional local-only fallback if agent package is available in the environment
             from app.services.research import ResearchWorkflow  # type: ignore
+
             # Local in-process fallback
             async def _local_runner():
                 try:
-                    wf = ResearchWorkflow(query=query, log_callback=None, depth=depth, breadth=breadth)
+                    wf = ResearchWorkflow(
+                        query=query, log_callback=None, depth=depth, breadth=breadth
+                    )
                     await wf.research()
-                except Exception as err:
+                except Exception as err:  # noqa: BLE001
                     print(f"[Local Runner Error]: {err}")
 
             asyncio.create_task(_local_runner())

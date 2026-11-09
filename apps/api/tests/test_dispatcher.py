@@ -1,8 +1,7 @@
-import os
 from unittest.mock import AsyncMock, patch
 
-import pytest
 import httpx
+import pytest
 
 from app.dispatcher import dispatch_research_job
 
