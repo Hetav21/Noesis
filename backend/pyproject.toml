@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "aiosqlite>=0.22.0",
-    "beautifulsoup4>=4.14.3",
+    "beautifulsoup4>=4.15.0",
     "ddgs>=8.0.0",
     "fastapi>=0.125.0",
     "openai-agents>=0.6.3",
