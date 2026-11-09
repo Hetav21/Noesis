@@ -5,9 +5,12 @@ __pycache__/
 *.pyc
 
 # Build outputs
+.next/
 dist/
 build/
 *.egg-info/
+next-env.d.ts
+.ruff_cache/
 
 # Database
 *.db
