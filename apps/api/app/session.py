@@ -122,13 +122,17 @@ def get_client_ip(request: Request) -> str:
         if cf_connecting_ip:
             return cf_connecting_ip.strip()
 
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-
         real_ip = request.headers.get("x-real-ip")
         if real_ip:
             return real_ip.strip()
+
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            # When behind trusted reverse proxies, the rightmost entry appended by
+            # the trusted proxy boundary is authoritative against client-injected values
+            parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+            if parts:
+                return parts[-1]
 
     return direct_host
 
@@ -206,7 +210,9 @@ async def get_or_create_session_id(
 
     if not session_id:
         session_id = generate_session_id()
-        set_signed_session_cookie(response, session_id, request)
+
+    # Renew signed cookie for active sessions to keep max-age fresh
+    set_signed_session_cookie(response, session_id, request)
 
     return session_id
 

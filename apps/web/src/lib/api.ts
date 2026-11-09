@@ -30,14 +30,16 @@ export const ensureSession = async (): Promise<void> => {
   if (typeof window === "undefined") return;
   if (!sessionBootstrapPromise) {
     sessionBootstrapPromise = (async () => {
-      try {
-        await fetch(`${getBaseUrl()}/session/me`, {
-          credentials: "include",
-        });
-      } catch {
-        // Non-blocking fallback
+      const res = await fetch(`${getBaseUrl()}/session/me`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to initialize session: ${res.statusText}`);
       }
-    })();
+    })().catch((err) => {
+      sessionBootstrapPromise = null;
+      throw err;
+    });
   }
   return sessionBootstrapPromise;
 };
