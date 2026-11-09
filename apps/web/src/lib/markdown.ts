@@ -1,0 +1,217 @@
+import React from "react";
+
+export interface ParsedSource {
+  index: number;
+  title: string;
+  url: string;
+  domain?: string;
+}
+
+/**
+ * Generates a clean URL slug from heading text compatible with standard GFM anchors.
+ */
+export function slugify(text: string): string {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+/, "")
+    .replace(/-+$/, "");
+}
+
+/**
+ * Returns primary slug and, if applicable, a secondary slug without leading numbering.
+ * E.g. "1. Introduction" -> ["1-introduction", "introduction"]
+ */
+export function getHeadingSlugs(text: string): string[] {
+  const clean = text.trim();
+  const primary = slugify(clean);
+  const withoutNumber = slugify(clean.replace(/^\d+[\.\)\-]?\s*/, ""));
+  if (withoutNumber && withoutNumber !== primary) {
+    return [primary, withoutNumber];
+  }
+  return [primary];
+}
+
+/**
+ * Extracts plain text from nested React children.
+ */
+export function getNodeText(node: React.ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") {
+    return "";
+  }
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map(getNodeText).join("");
+  }
+  if (
+    React.isValidElement(node) &&
+    node.props &&
+    (node.props as { children?: React.ReactNode }).children
+  ) {
+    return getNodeText((node.props as { children?: React.ReactNode }).children);
+  }
+  return "";
+}
+
+/**
+ * Extracts a hostname/domain for display from a URL string.
+ */
+export function extractDomain(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Normalizes research reports so that:
+ * 1. Headings and Table of Contents anchors align properly.
+ * 2. Unlinked or parenthetical citations (e.g., "(Stanford HAI)", "(IBM; Google Cloud)", "[1]")
+ *    are converted into interactive in-text bracketed citations: "[[1]](#source-1)".
+ * 3. The "## Sources" section is cleanly structured as a numbered list with citation anchors and links.
+ */
+export function normalizeReportMarkdown(text: string): {
+  normalized: string;
+  sources: ParsedSource[];
+} {
+  if (!text || typeof text !== "string") {
+    return { normalized: "", sources: [] };
+  }
+
+  // Find Sources or References section
+  const sourcesSectionRegex =
+    /(?:^|\n)(##?\s+(?:Sources|References)\b[^\n]*\n)([\s\S]*?)(?=\n##|\n#[^#]|$)/i;
+  const sourcesMatch = text.match(sourcesSectionRegex);
+
+  if (!sourcesMatch || sourcesMatch.index === undefined) {
+    return { normalized: text, sources: [] };
+  }
+
+  const header = sourcesMatch[1];
+  const sourcesContent = sourcesMatch[2];
+  const sourcesStart =
+    sourcesMatch.index + (sourcesMatch[0].startsWith("\n") ? 1 : 0);
+
+  // Parse source entries
+  const rawLines = sourcesContent.split("\n").filter((l) => l.trim().length > 0);
+  const sources: ParsedSource[] = [];
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i].trim();
+
+    // Markdown link: [Title](URL) or 1. [Title](URL) or [[1]](#source-1) [Title](URL)
+    const mdLink = line.match(/(?:\[\[?\d+\]?\]\(#[^\)]+\)\s*)?\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/);
+    if (mdLink) {
+      sources.push({
+        index: i + 1,
+        title: mdLink[1].trim(),
+        url: mdLink[2].trim(),
+        domain: extractDomain(mdLink[2].trim()),
+      });
+      continue;
+    }
+
+    // Text with URL: - Title: URL or 1. Title: URL or Title - URL
+    const namedUrl = line.match(
+      /^(?:[-*•\d\.\)]+\s*)(.*?)(?::\s*|\s*-\s*|\s+)(https?:\/\/[^\s\)]+)/,
+    );
+    if (namedUrl) {
+      sources.push({
+        index: i + 1,
+        title: namedUrl[1].trim(),
+        url: namedUrl[2].trim(),
+        domain: extractDomain(namedUrl[2].trim()),
+      });
+      continue;
+    }
+
+    // Bare URL
+    const bareUrl = line.match(/(https?:\/\/[^\s\)]+)/);
+    if (bareUrl) {
+      sources.push({
+        index: i + 1,
+        title: `Source ${i + 1}`,
+        url: bareUrl[1].trim(),
+        domain: extractDomain(bareUrl[1].trim()),
+      });
+    }
+  }
+
+  if (sources.length === 0) {
+    return { normalized: text, sources: [] };
+  }
+
+  // Build title lookup for matching parenthetical citations
+  const titleToSource = new Map<string, ParsedSource>();
+  for (const s of sources) {
+    if (s.title) {
+      titleToSource.set(s.title.toLowerCase(), s);
+      const clean = s.title.toLowerCase().replace(/^[^\w]+|[^\w]+$/g, "");
+      if (clean) titleToSource.set(clean, s);
+    }
+  }
+
+  // Process the body content before ## Sources
+  let body = text.slice(0, sourcesStart);
+
+  // 1. Replace parenthetical citations like "(Stanford HAI)" or "(IBM; Google Cloud)"
+  body = body.replace(/\(([^()\n]{2,80})\)/g, (fullMatch, inner) => {
+    // Avoid replacing anything inside links or standard text unless all parts match sources
+    const parts = inner.split(/[;,]\s*/).map((p: string) => p.trim());
+    const matched: ParsedSource[] = [];
+    for (const part of parts) {
+      const s = titleToSource.get(part.toLowerCase());
+      if (s) {
+        matched.push(s);
+      }
+    }
+    if (matched.length > 0 && matched.length === parts.length) {
+      return matched
+        .map((m) => ` [[${m.index}]](#source-${m.index})`)
+        .join("");
+    }
+    return fullMatch;
+  });
+
+  // 2. Replace unlinked bracket citations like "[1]" or "[1, 2]" or "[1][2]"
+  // Avoid replacing markdown links [1](...) or images ![1] or footnote defs [1]:
+  body = body.replace(
+    /(?<!\[)(?<!\!)\[(\d+(?:\s*,\s*\d+)*)\](?!\()(?!:)/g,
+    (fullMatch, nums) => {
+      const splitNums = nums
+        .split(/\s*,\s*/)
+        .map((n: string) => parseInt(n, 10))
+        .filter((n: number) => !isNaN(n));
+      if (
+        splitNums.length > 0 &&
+        splitNums.every((n: number) => n <= sources.length)
+      ) {
+        return splitNums
+          .map((n: number) => ` [[${n}]](#source-${n})`)
+          .join("");
+      }
+      return fullMatch;
+    },
+  );
+
+  // 3. Format the ## Sources section into clean numbered items with source anchors
+  let newSourcesSection = `${header}\n`;
+  for (const s of sources) {
+    newSourcesSection += `${s.index}. [[${s.index}]](#source-${s.index}) [${s.title}](${s.url})\n`;
+  }
+  newSourcesSection += "\n";
+
+  const afterSources = text.slice(sourcesStart + sourcesMatch[0].length);
+  return {
+    normalized: `${body}${newSourcesSection}${afterSources}`,
+    sources,
+  };
+}
