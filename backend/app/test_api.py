@@ -1,7 +1,9 @@
 import pytest
-from httpx import AsyncClient, ASGITransport
-from app.main import app
+from httpx import ASGITransport, AsyncClient
+
 from app.db import init_db
+from app.main import app
+
 
 @pytest.mark.asyncio
 async def test_health_check():
@@ -13,7 +15,9 @@ async def test_health_check():
         assert data["status"] == "ok"
         assert data["service"] == "deep-research-agent"
 
+
 from unittest.mock import patch
+
 
 @pytest.mark.asyncio
 async def test_research_job_lifecycle():
@@ -57,6 +61,7 @@ async def test_research_job_lifecycle():
             # 5. Verify 404 after deletion
             not_found_res = await client.get(f"/api/research/{job_id}")
             assert not_found_res.status_code == 404
+
 
 @pytest.mark.asyncio
 async def test_validation_empty_query():
