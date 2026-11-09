@@ -21,8 +21,9 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
+      api: ${{ steps.filter.outputs.api }}
+      agent: ${{ steps.filter.outputs.agent }}
+      web: ${{ steps.filter.outputs.web }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,25 +32,30 @@ jobs:
         uses: dorny/paths-filter@v3
         id: filter
         with:
+          base: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || '' }}
           filters: |
-            backend:
-              - 'backend/**'
+            api:
+              - 'apps/api/**'
               - '.github/workflows/ci.yml'
               - 'flake.*'
-            frontend:
-              - 'frontend/**'
+            agent:
+              - 'apps/agent/**'
+              - '.github/workflows/ci.yml'
+              - 'flake.*'
+            web:
+              - 'apps/web/**'
               - '.github/workflows/ci.yml'
               - 'flake.*'
 
-  backend:
-    name: Backend (Python & Pytest)
+  api:
+    name: REST API (Python & Pytest)
     needs: detect-changes
-    if: github.event_name == 'push' || needs.detect-changes.outputs.backend == 'true'
+    if: needs.detect-changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: backend
+        working-directory: apps/api
 
     services:
       postgres:
@@ -74,7 +80,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "backend/uv.lock"
+          cache-dependency-glob: "apps/api/uv.lock"
 
       - name: Install Python interpreter
         run: uv python install
@@ -91,17 +97,70 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:postgrespassword@localhost:5432/noesis_test
           TESTING: "true"
           SESSION_SECRET: "test-session-secret-key-32-bytes-long-for-hmac"
-        run: PYTHONPATH=. uv run --with pytest --with pytest-asyncio pytest -v
+        run: PYTHONPATH=. uv run --with pytest --with pytest-asyncio --with httpx pytest -v
 
-  frontend:
-    name: Frontend (Bun & Build)
+  agent:
+    name: Agent Engine (Python & Pytest)
     needs: detect-changes
-    if: github.event_name == 'push' || needs.detect-changes.outputs.frontend == 'true'
+    if: needs.detect-changes.outputs.agent == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: frontend
+        working-directory: apps/agent
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: noesis_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "apps/agent/uv.lock"
+
+      - name: Install Python interpreter
+        run: uv python install
+
+      - name: Sync dependencies
+        run: uv sync --frozen || uv sync
+
+      - name: Lint and format check (Ruff)
+        run: uvx ruff check . --output-format=github
+        continue-on-error: true
+
+      - name: Run test suite
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgrespassword@localhost:5432/noesis_test
+          TESTING: "true"
+          OPENAI_API_KEY: "test-mock-key"
+          AGENT_INTERNAL_SECRET: "test-agent-internal-secret-32-bytes"
+        run: PYTHONPATH=. uv run --with pytest --with pytest-asyncio --with httpx pytest -v
+
+  web:
+    name: Web App (Bun & Build)
+    needs: detect-changes
+    if: needs.detect-changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/web
 
     steps:
       - name: Checkout repository
@@ -122,15 +181,14 @@ jobs:
 
   ci:
     name: CI
-    needs: [detect-changes, backend, frontend]
+    needs: [detect-changes, api, agent, web]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate status
         run: |
-          if [ "${{ needs.backend.result }}" = "failure" ] || [ "${{ needs.frontend.result }}" = "failure" ]; then
+          if [ "${{ needs.detect-changes.result }}" != "success" ] || [ "${{ needs.api.result }}" = "failure" ] || [ "${{ needs.agent.result }}" = "failure" ] || [ "${{ needs.web.result }}" = "failure" ]; then
             echo "CI checks failed."
             exit 1
           fi
           echo "CI checks succeeded or cleanly skipped."
-

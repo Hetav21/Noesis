@@ -255,6 +255,7 @@ async def test_shared_ip_rate_limiting_with_testing_false(monkeypatch):
     """Verify that separate sessions sharing a non-loopback IP are capped by the shared IP limit."""
     transport = ASGITransport(app=app)
     monkeypatch.setenv("TESTING", "false")
+    monkeypatch.setenv("ALLOW_QUEUE_ONLY", "true")
     monkeypatch.setenv("TRUST_ALL_PROXIES", "true")
     monkeypatch.setenv("RATE_LIMIT_JOBS_PER_HOUR", "2")
     monkeypatch.setenv("MAX_CONCURRENT_JOBS_PER_SESSION", "0")
@@ -285,3 +286,16 @@ async def test_shared_ip_rate_limiting_with_testing_false(monkeypatch):
             )
             assert r_b2.status_code == 429
             assert "Rate limit exceeded" in r_b2.json()["detail"]
+
+
+def test_get_session_secret_rejects_example_placeholders(monkeypatch):
+    """Verify that get_session_secret strictly rejects all example placeholder secrets."""
+    placeholders = [
+        "change-this-to-a-secure-random-secret-in-production",
+        "change-this-to-a-cryptographically-random-secret-in-production",
+        "change-this-to-anything-else",
+    ]
+    for ph in placeholders:
+        monkeypatch.setenv("SESSION_SECRET", ph)
+        with pytest.raises(ValueError, match="example placeholder value"):
+            get_session_secret()

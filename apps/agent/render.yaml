@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: noesis-agent
+    runtime: docker
+    dockerfilePath: apps/agent/Dockerfile
+    dockerContext: apps/agent
+    plan: free
+    region: oregon
+    envVars:
+      - key: PORT
+        value: 8001
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AGENT_INTERNAL_SECRET
+        generateValue: true
+      - key: DB_USE_NULL_POOL
+        value: "true"
+      - key: ENABLE_QUEUE_POLLER
+        value: "true"
+      - key: AGENT_POLL_INTERVAL_SECONDS
+        value: "8"

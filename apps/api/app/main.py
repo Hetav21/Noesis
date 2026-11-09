@@ -1,6 +1,5 @@
 import asyncio
 import os
-import traceback
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -11,7 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import desc, select
 
-from app.db import async_session, check_db_health, get_session, init_db
+from app.db import check_db_health, get_session, init_db
+from app.dispatcher import cancel_remote_job, dispatch_research_job, is_dispatch_configured
 from app.limiter import (
     check_rate_limits,
     rate_limit_lock,
@@ -20,7 +20,6 @@ from app.limiter import (
     unregister_active_workflow,
 )
 from app.models import JobStatus, ResearchJob, ResearchJobCreate, ResearchJobRead
-from app.services.research import ResearchWorkflow
 from app.session import ClientIpDep, SessionIdDep, get_session_secret
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -214,89 +213,18 @@ async def run_research_task(
     breadth: int,
     session_id: str | None = None,
     client_ip: str | None = None,
-):
-    """Execute autonomous multi-agent research pipeline in background task."""
+) -> None:
+    """Delegate research execution to the autonomous agent engine on Render."""
     register_active_workflow(job_id, session_id, client_ip)
-    session_factory = async_session
     try:
-        async with session_factory() as db:
-            try:
-                result = await db.execute(
-                    select(ResearchJob).where(ResearchJob.id == job_id)
-                )
-                job = result.scalar_one_or_none()
-                if not job:
-                    print(f"Job {job_id} not found")
-                    return
-
-                job.status = JobStatus.RUNNING
-                job.logs = [
-                    {
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "message": "Research started",
-                        "level": "info",
-                    }
-                ]
-                await db.commit()
-
-                async def log_callback(log_entry: dict):
-                    async with session_factory() as update_db:
-                        res = await update_db.execute(
-                            select(ResearchJob).where(ResearchJob.id == job_id)
-                        )
-                        curr_job = res.scalar_one_or_none()
-                        if curr_job:
-                            logs = curr_job.logs
-                            log_entry["timestamp"] = datetime.now(UTC).isoformat()
-                            logs.append(log_entry)
-                            curr_job.logs = logs
-                            await update_db.commit()
-
-                workflow = ResearchWorkflow(
-                    query=query, log_callback=log_callback, depth=depth, breadth=breadth
-                )
-                final_result = await workflow.research()
-
-                async with session_factory() as final_db:
-                    result = await final_db.execute(
-                        select(ResearchJob).where(ResearchJob.id == job_id)
-                    )
-                    job = result.scalar_one_or_none()
-                    if job:
-                        job.status = JobStatus.COMPLETED
-                        job.result = final_result
-                        logs = job.logs
-                        logs.append(
-                            {
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "message": "Research completed",
-                                "level": "success",
-                            }
-                        )
-                        job.logs = logs
-                        await final_db.commit()
-
-            except Exception as e:  # noqa: BLE001
-                print(f"Error in research task: {e}")
-                traceback.print_exc()
-                async with session_factory() as err_db:
-                    result = await err_db.execute(
-                        select(ResearchJob).where(ResearchJob.id == job_id)
-                    )
-                    job = result.scalar_one_or_none()
-                    if job:
-                        job.status = JobStatus.FAILED
-                        job.result = f"Error: {e!s}"
-                        logs = job.logs
-                        logs.append(
-                            {
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "message": f"Job failed: {e!s}",
-                                "level": "error",
-                            }
-                        )
-                        job.logs = logs
-                        await err_db.commit()
+        await dispatch_research_job(
+            job_id=job_id,
+            query=query,
+            depth=depth,
+            breadth=breadth,
+            session_id=session_id,
+            client_ip=client_ip,
+        )
     finally:
         unregister_active_workflow(job_id, session_id, client_ip)
 
@@ -346,6 +274,12 @@ async def create_research_job(
     query_text = research_job_create.query.strip()
     if not query_text:
         raise HTTPException(status_code=400, detail="Research query cannot be empty")
+
+    if not is_dispatch_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="No agent execution engine configured (AGENT_SERVICE_URL is unset).",
+        )
 
     depth = max(1, min(5, research_job_create.depth))
     breadth = max(2, min(10, research_job_create.breadth))
@@ -443,6 +377,10 @@ async def delete_research_job(
             status_code=403,
             detail="Forbidden: You do not have permission to delete this research session.",
         )
+
+    # If the job is active, attempt remote cancellation so agent resources are not wasted
+    if job.status in (JobStatus.QUEUED, JobStatus.RUNNING):
+        await cancel_remote_job(job.id)
 
     await db.delete(job)
     await db.commit()
