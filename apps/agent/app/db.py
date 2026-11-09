@@ -33,6 +33,20 @@ def get_database_url() -> str:
     # asyncpg expects 'ssl' instead of libpq's 'sslmode' query parameter
     raw_url = re.sub(r"([?&])sslmode=", r"\1ssl=", raw_url)
 
+    # asyncpg does not support SCRAM channel binding ('channel_binding' parameter).
+    # Neon URLs sometimes include channel_binding=require.
+    if re.search(r"[?&]channel_binding=", raw_url):
+        allow_unbound = os.getenv("ALLOW_UNBOUND_CHANNEL", "false").lower() in ("true", "1")
+        if allow_unbound:
+            raw_url = re.sub(r"([?&])channel_binding=[^&]*(&|$)", r"\1", raw_url).rstrip("?&")
+        else:
+            raise ValueError(
+                "asyncpg driver does not support channel binding ('channel_binding' parameter). "
+                "To connect to Neon, remove 'channel_binding=require' from DATABASE_URL "
+                "(TLS transport encryption remains fully enforced via ssl=require), or set "
+                "ALLOW_UNBOUND_CHANNEL=true to permit stripping this unsupported parameter."
+            )
+
     return raw_url
 
 

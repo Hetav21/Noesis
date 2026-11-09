@@ -2,7 +2,7 @@ import asyncio
 import os
 import traceback
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
@@ -26,9 +26,12 @@ def verify_internal_secret(
         "INTERNAL_SERVICE_KEY", ""
     ).strip()
 
-    # If no secret is configured in the environment (e.g. local dev), allow requests
+    # Reject requests if no internal secret is configured
     if not expected_secret:
-        return True
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized: Internal service secret is not configured on the server",
+        )
 
     # Check X-Internal-Secret header
     if x_internal_secret and x_internal_secret == expected_secret:
@@ -64,24 +67,33 @@ async def run_research_task(
                 print(f"[Agent] Job {job_id} not found in database, skipping")
                 return
 
-            job.status = JobStatus.RUNNING
-            job.logs = [
-                {
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "message": "Research started by Noesis Agent",
-                    "level": "info",
-                }
-            ]
-            await db.commit()
+            if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                print(f"[Agent] Job {job_id} already in terminal status {job.status}, skipping")
+                return
+
+            if job.status != JobStatus.RUNNING:
+                job.status = JobStatus.RUNNING
+                logs = job.logs or []
+                logs.append(
+                    {
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "message": "Research started by Noesis Agent",
+                        "level": "info",
+                    }
+                )
+                job.logs = logs
+                await db.commit()
 
         async def log_callback(log_entry: dict):
-            """Stream log entries to database."""
+            """Stream log entries to database and check for external cancellation."""
             async with session_factory() as update_db:
                 res = await update_db.execute(
                     select(ResearchJob).where(ResearchJob.id == job_id)
                 )
                 curr_job = res.scalar_one_or_none()
                 if curr_job:
+                    if curr_job.status == JobStatus.FAILED:
+                        raise asyncio.CancelledError(f"Job {job_id} cancelled remotely")
                     logs = curr_job.logs
                     log_entry["timestamp"] = datetime.now(UTC).isoformat()
                     logs.append(log_entry)
@@ -98,7 +110,7 @@ async def run_research_task(
                 select(ResearchJob).where(ResearchJob.id == job_id)
             )
             job = result.scalar_one_or_none()
-            if job:
+            if job and job.status != JobStatus.FAILED:
                 job.status = JobStatus.COMPLETED
                 job.result = final_result
                 logs = job.logs
@@ -166,15 +178,56 @@ async def queue_worker_loop():
         try:
             await asyncio.sleep(poll_interval)
             async with async_session() as db:
+                # 1. Recover orphaned running jobs (> 20 mins old) from prior worker crashes
+                stale_cutoff = datetime.now(UTC) - timedelta(minutes=20)
+                orphaned_res = await db.execute(
+                    select(ResearchJob)
+                    .where(
+                        ResearchJob.status == JobStatus.RUNNING,
+                        ResearchJob.created_at < stale_cutoff,
+                    )
+                    .limit(5)
+                )
+                orphaned_jobs = orphaned_res.scalars().all()
+                for orphaned in orphaned_jobs:
+                    if orphaned.id and orphaned.id not in _active_jobs:
+                        print(f"[Agent Worker] Recovering orphaned/stalled job {orphaned.id}")
+                        orphaned.status = JobStatus.FAILED
+                        orphaned.result = "Job timed out or worker restarted unexpectedly."
+                        logs = orphaned.logs or []
+                        logs.append(
+                            {
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "message": "Job recovered from interrupted execution and marked failed",
+                                "level": "error",
+                            }
+                        )
+                        orphaned.logs = logs
+                        await db.commit()
+
+                # 2. Claim queued job atomically using SELECT FOR UPDATE SKIP LOCKED
                 result = await db.execute(
                     select(ResearchJob)
                     .where(ResearchJob.status == JobStatus.QUEUED)
                     .order_by(ResearchJob.created_at.asc())
+                    .with_for_update(skip_locked=True)
                     .limit(1)
                 )
                 job = result.scalar_one_or_none()
                 if job and job.id and job.id not in _active_jobs:
-                    print(f"[Agent Worker] Found queued job {job.id}: '{job.query}'")
+                    print(f"[Agent Worker] Atomically claimed queued job {job.id}: '{job.query}'")
+                    job.status = JobStatus.RUNNING
+                    logs = job.logs or []
+                    logs.append(
+                        {
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "message": "Research claimed by queue worker",
+                            "level": "info",
+                        }
+                    )
+                    job.logs = logs
+                    await db.commit()
+
                     task = asyncio.create_task(
                         run_research_task(
                             job_id=job.id,
@@ -211,9 +264,12 @@ async def lifespan(app: FastAPI):
             # Expected when the background queue poller task is cancelled on app shutdown
             pass
 
-    # Cancel any active running jobs on shutdown
-    for job_id, task in list(_active_jobs.items()):
+    # Cancel any active running jobs on shutdown and await their db cleanup
+    tasks_to_cancel = list(_active_jobs.values())
+    for task in tasks_to_cancel:
         task.cancel()
+    if tasks_to_cancel:
+        await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
 
 
 app = FastAPI(
@@ -256,22 +312,61 @@ async def dispatch_job(
     if req.job_id in _active_jobs:
         return {"status": "already_running", "job_id": req.job_id}
 
-    query_text = req.query
-    depth = req.depth
-    breadth = req.breadth
-
-    # If query not supplied in request, read from DB
-    if not query_text:
-        async with async_session() as db:
-            result = await db.execute(
-                select(ResearchJob).where(ResearchJob.id == req.job_id)
-            )
-            job = result.scalar_one_or_none()
-            if not job:
+    async with async_session() as db:
+        result = await db.execute(
+            select(ResearchJob).where(ResearchJob.id == req.job_id).with_for_update()
+        )
+        job = result.scalar_one_or_none()
+        if not job:
+            if not req.query:
                 raise HTTPException(status_code=404, detail="Job not found")
-            query_text = job.query
-            depth = job.depth
-            breadth = job.breadth
+            db_job = ResearchJob(
+                id=req.job_id,
+                query=req.query,
+                depth=req.depth,
+                breadth=req.breadth,
+                session_id=req.session_id,
+                client_ip=req.client_ip,
+                status=JobStatus.RUNNING,
+                logs_json="[]",
+            )
+            logs = [
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "message": "Research started via dispatch webhook",
+                    "level": "info",
+                }
+            ]
+            db_job.logs = logs
+            db.add(db_job)
+            await db.commit()
+
+            query_text = req.query
+            depth = req.depth
+            breadth = req.breadth
+        else:
+            # Terminal status check: do not rerun completed or failed jobs
+            if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                return {"status": "already_finished", "job_id": req.job_id}
+
+            if job.status == JobStatus.RUNNING and req.job_id in _active_jobs:
+                return {"status": "already_running", "job_id": req.job_id}
+
+            job.status = JobStatus.RUNNING
+            logs = job.logs or []
+            logs.append(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "message": "Research started via dispatch webhook",
+                    "level": "info",
+                }
+            )
+            job.logs = logs
+            await db.commit()
+
+            query_text = req.query or job.query
+            depth = req.depth or job.depth
+            breadth = req.breadth or job.breadth
 
     task = asyncio.create_task(
         run_research_task(
@@ -293,10 +388,33 @@ async def cancel_job(
     job_id: str,
     _auth: bool = Depends(verify_internal_secret),
 ):
-    """Cancel an in-flight research execution."""
+    """Cancel an in-flight research execution, signaling across instances."""
     task = _active_jobs.get(job_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Job not actively executing")
+    if task:
+        task.cancel()
+        return {"status": "cancelled", "job_id": job_id}
 
-    task.cancel()
-    return {"status": "cancelled", "job_id": job_id}
+    # Signal cancellation in database for non-owning instance
+    async with async_session() as db:
+        result = await db.execute(select(ResearchJob).where(ResearchJob.id == job_id))
+        job = result.scalar_one_or_none()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        if job.status == JobStatus.COMPLETED:
+            return {"status": "already_completed", "job_id": job_id}
+        if job.status == JobStatus.FAILED:
+            return {"status": "already_failed", "job_id": job_id}
+
+        job.status = JobStatus.FAILED
+        job.result = "Job was cancelled."
+        logs = job.logs or []
+        logs.append(
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "message": "Job execution cancelled by remote request",
+                "level": "warning",
+            }
+        )
+        job.logs = logs
+        await db.commit()
+        return {"status": "cancelled", "job_id": job_id}

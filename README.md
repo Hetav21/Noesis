@@ -38,9 +38,9 @@ graph TD
 
 | Application | Path | Runtime | Hosting Target | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
-| **`web`** | [`apps/web`](file:///home/hetav/Desktop/Code/deep-research-agent/apps/web) | Next.js 16, React 19, Bun | Vercel (`noesis.hetav.dev`) | Interactive research workspace and polling stream UI |
-| **`api`** | [`apps/api`](file:///home/hetav/Desktop/Code/deep-research-agent/apps/api) | FastAPI, Python 3.11 | Vercel Serverless (`api.noesis.hetav.dev`) | Session isolation, rate limiting, job CRUD, dispatch gateway |
-| **`agent`** | [`apps/agent`](file:///home/hetav/Desktop/Code/deep-research-agent/apps/agent) | Python 3.11, OpenAI Agents SDK | Render (Docker / Web Service) | Persistent multi-agent research pipeline and queue worker |
+| **`web`** | [`apps/web`](apps/web) | Next.js 16, React 19, Bun | Vercel (`noesis.hetav.dev`) | Interactive research workspace and polling stream UI |
+| **`api`** | [`apps/api`](apps/api) | FastAPI, Python 3.11 | Vercel Serverless (`api.noesis.hetav.dev`) | Session isolation, rate limiting, job CRUD, dispatch gateway |
+| **`agent`** | [`apps/agent`](apps/agent) | Python 3.11, OpenAI Agents SDK | Render (Docker / Web Service) | Persistent multi-agent research pipeline and queue worker |
 
 ## 3. Technology Stack
 
@@ -130,7 +130,7 @@ Open [http://localhost:3001](http://localhost:3001) in your browser.
 ### Deploying `agent` to Render
 1. Create a new **Web Service** on Render connected to this repository.
 2. Root Directory: `apps/agent`.
-3. Runtime: **Docker** (uses [`apps/agent/Dockerfile`](file:///home/hetav/Desktop/Code/deep-research-agent/apps/agent/Dockerfile)).
+3. Runtime: **Docker** (uses [`apps/agent/Dockerfile`](apps/agent/Dockerfile)).
 4. Add environment variables:
    * `DATABASE_URL` (Neon PostgreSQL asyncpg URL)
    * `OPENAI_API_KEY` (OpenAI API key)

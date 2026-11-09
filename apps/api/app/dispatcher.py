@@ -1,7 +1,15 @@
-import asyncio
 import os
 
 import httpx
+
+
+def is_dispatch_configured() -> bool:
+    """Check whether a remote or queue execution engine is configured for jobs."""
+    return bool(
+        os.getenv("AGENT_SERVICE_URL", "").strip()
+        or os.getenv("ALLOW_QUEUE_ONLY", "false").lower() in ("true", "1")
+        or os.getenv("TESTING", "false").lower() in ("true", "1")
+    )
 
 
 async def dispatch_research_job(
@@ -71,27 +79,5 @@ async def dispatch_research_job(
             )
             return False
 
-    # In local development or testing when AGENT_SERVICE_URL is not set:
-    # If in-process execution is explicitly enabled or in test mode:
-    run_in_process = os.getenv("RUN_IN_PROCESS", "false").lower() in ("true", "1")
-    if run_in_process:
-        try:
-            # Optional local-only fallback if agent package is available in the environment
-            from app.services.research import ResearchWorkflow  # type: ignore
-
-            # Local in-process fallback
-            async def _local_runner():
-                try:
-                    wf = ResearchWorkflow(
-                        query=query, log_callback=None, depth=depth, breadth=breadth
-                    )
-                    await wf.research()
-                except Exception as err:  # noqa: BLE001
-                    print(f"[Local Runner Error]: {err}")
-
-            asyncio.create_task(_local_runner())
-            return True
-        except ImportError:
-            pass
-
-    return True
+    # When AGENT_SERVICE_URL is not set (e.g. testing or explicit queue-only worker setup):
+    return is_dispatch_configured()

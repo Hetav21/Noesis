@@ -73,6 +73,36 @@ def test_get_database_url_sslmode_normalized():
         )
 
 
+def test_get_database_url_rejects_unbound_channel_binding_by_default():
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "DATABASE_URL": "postgresql://user:secret@ep-test.neon.tech/neondb?sslmode=require&channel_binding=require"
+            },
+            clear=True,
+        ),
+        pytest.raises(ValueError, match="asyncpg driver does not support channel binding"),
+    ):
+        get_database_url()
+
+
+def test_get_database_url_allows_stripping_channel_binding_when_opted_in():
+    with patch.dict(
+        os.environ,
+        {
+            "DATABASE_URL": "postgresql://user:secret@ep-test.neon.tech/neondb?sslmode=require&channel_binding=require",
+            "ALLOW_UNBOUND_CHANNEL": "true",
+        },
+        clear=True,
+    ):
+        url = get_database_url()
+        assert (
+            url
+            == "postgresql+asyncpg://user:secret@ep-test.neon.tech/neondb?ssl=require"
+        )
+
+
 @pytest.mark.asyncio
 async def test_check_db_health():
     await init_db()
