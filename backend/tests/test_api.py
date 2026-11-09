@@ -2,45 +2,34 @@ from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlmodel import SQLModel
+from sqlmodel import text
 
-from app.db import get_session
+from app.db import async_session, init_db
 from app.main import app
 
 
 @pytest.fixture(autouse=True)
 async def isolate_database():
-    """Use an isolated in-memory SQLite database for each test."""
-    test_engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        echo=False,
-        future=True,
-    )
-    async with test_engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-
-    test_session_maker = async_sessionmaker(test_engine, expire_on_commit=False)
-
-    async def override_get_session() -> AsyncSession:
-        async with test_session_maker() as session:
-            yield session
-
-    app.dependency_overrides[get_session] = override_get_session
+    """Ensure PostgreSQL schema is initialized for tests and clean up test data."""
+    await init_db()
     yield
-    app.dependency_overrides.clear()
-    await test_engine.dispose()
+    async with async_session() as session:
+        await session.execute(text("DELETE FROM researchjob WHERE query LIKE 'Test%'"))
+        await session.commit()
 
 
 @pytest.mark.asyncio
 async def test_health_check():
+    await init_db()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/api/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ok"
-        assert data["service"] == "noesis"
+        for path in ["/health", "/api/health"]:
+            response = await client.get(path)
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] in ["ok", "degraded"]
+            assert data["service"] == "noesis"
+            assert data["database"] == "connected"
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,7 @@ early_access: false
 
 tone_instructions: >-
   Direct, technically precise, and actionable. Prioritize async event loop safety,
-  agent prompt efficiency, SQLite/SQLModel concurrency, Next.js/React 19 state
+  agent prompt efficiency, Neon PostgreSQL/SQLModel concurrency, Next.js/React 19 state
   hygiene, and secret protection.
 
 reviews:
@@ -47,14 +47,14 @@ reviews:
         instructions: |-
           Verify that:
           1. Synchronous I/O operations (such as blocking network requests, synchronous `DDGS().text()`, or disk reads) are never executed directly on the main asyncio event loop inside `async def` endpoints.
-          2. Any synchronous blocking tasks are properly wrapped with `asyncio.to_thread` or use native async libraries (`httpx`, `aiosqlite`).
+          2. Any synchronous blocking tasks are properly wrapped with `asyncio.to_thread` or use native async libraries (`httpx`, `asyncpg`).
           3. Agent iteration loops include cancellation awareness or reasonable timeouts.
 
       - name: "Database & Concurrency Integrity"
         mode: "warning"
         instructions: |-
           Verify that:
-          1. Database sessions with `aiosqlite` and `sqlmodel` are properly scoped, committed, and closed.
+          1. Database sessions with `asyncpg` and `sqlmodel` are properly scoped, committed, and closed.
           2. Concurrent job updates do not overwrite logs or status states with stale data.
 
       - name: "Frontend State & Component Hygiene"

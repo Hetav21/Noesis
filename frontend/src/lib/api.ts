@@ -1,11 +1,17 @@
 const getBaseUrl = () => {
   if (typeof window !== "undefined") {
-    return "/api";
+    return process.env.NEXT_PUBLIC_API_URL || "/api";
   }
-  return process.env.BACKEND_URL
-    ? `${process.env.BACKEND_URL}/api`
-    : "http://localhost:8000/api";
+  if (process.env.BACKEND_URL) {
+    const raw = process.env.BACKEND_URL.replace(/\/+$/, "").replace(/\/api$/, "");
+    return `${raw}/api`;
+  }
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, "");
+  }
+  return "http://localhost:8000/api";
 };
+
 
 export interface ResearchConfig {
   query: string;

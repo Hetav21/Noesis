@@ -32,7 +32,7 @@ def url_scrape(url: str) -> str:
             return text[:5000] if len(text) > 5000 else text
         except ImportError:
             return response.text[:5000]
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return f"Failed to scrape content from {url}: {e!s}"
 
 

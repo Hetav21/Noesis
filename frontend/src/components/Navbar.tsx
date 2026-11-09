@@ -21,13 +21,49 @@ export const Navbar: React.FC = () => {
             viewBox="0 0 32 32"
             fill="none"
           >
-            <rect width="32" height="32" rx="7" fill="#18181b" stroke="#27272a" strokeWidth="1" />
-            <polygon points="16,6.5 24.5,11.25 16,16 7.5,11.25" fill="#27272a" stroke="#3f3f46" strokeWidth="1" strokeLinejoin="round" />
-            <polygon points="7.5,11.25 16,16 16,25.5 7.5,20.75" fill="#09090b" stroke="#27272a" strokeWidth="1" strokeLinejoin="round" />
-            <polygon points="16,16 24.5,11.25 24.5,20.75 16,25.5" fill="#121216" stroke="#27272a" strokeWidth="1" strokeLinejoin="round" />
-            <path d="M16 16V4" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" />
+            <rect
+              width="32"
+              height="32"
+              rx="7"
+              fill="#18181b"
+              stroke="#27272a"
+              strokeWidth="1"
+            />
+            <polygon
+              points="16,6.5 24.5,11.25 16,16 7.5,11.25"
+              fill="#27272a"
+              stroke="#3f3f46"
+              strokeWidth="1"
+              strokeLinejoin="round"
+            />
+            <polygon
+              points="7.5,11.25 16,16 16,25.5 7.5,20.75"
+              fill="#09090b"
+              stroke="#27272a"
+              strokeWidth="1"
+              strokeLinejoin="round"
+            />
+            <polygon
+              points="16,16 24.5,11.25 24.5,20.75 16,25.5"
+              fill="#121216"
+              stroke="#27272a"
+              strokeWidth="1"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M16 16V4"
+              stroke="#818cf8"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
             <circle cx="16" cy="4" r="1.2" fill="#ffffff" />
-            <path d="M7.5 20.75V11.25L16 16L24.5 20.75V11.25" stroke="#f4f4f5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M7.5 20.75V11.25L16 16L24.5 20.75V11.25"
+              stroke="#f4f4f5"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
             <circle cx="16" cy="16" r="1.25" fill="#818cf8" />
           </svg>
           <span className="font-semibold text-sm tracking-tight">Noesis</span>

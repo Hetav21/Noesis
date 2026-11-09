@@ -20,7 +20,7 @@ Autonomous multi-agent research and synthesis engine. Built with FastAPI, SQLMod
 ```mermaid
 graph TD
     A["Next.js App Router (Port 3001)"] -->|"1. Submit research task"| B("FastAPI Backend (Port 8000)")
-    B -->|"2. Initialize session and state"| C[("SQLite Async (aiosqlite)")]
+    B -->|"2. Initialize session and state"| C[("Neon PostgreSQL (asyncpg)")]
     B -->|"3. Trigger async task"| D["Workflow Orchestrator"]
     D -->|"4. Plan search vectors"| E["Query Agent"]
     D -->|"5. Search and scrape (Threaded DDGS)"| F["Web Search Engine"]
@@ -35,7 +35,7 @@ graph TD
 
 | Layer | Technologies |
 | :--- | :--- |
-| **Backend** | Python 3.11+, FastAPI 0.162+, OpenAI Agents SDK, SQLModel 0.0.48+, aiosqlite, DuckDuckGo Search |
+| **Backend** | Python 3.11+, FastAPI 0.162+, OpenAI Agents SDK, SQLModel 0.0.48+, asyncpg, Neon PostgreSQL, DuckDuckGo Search |
 | **Frontend** | Next.js 16 (App Router), React 19, TypeScript 5.8+, Tailwind CSS 3.4, Lucide Icons, Canvas Confetti |
 | **Tooling and Dev** | Nix Flakes with Direnv, UV package manager, Bun runtime, Pytest with Pytest-Asyncio, ESLint |
 
