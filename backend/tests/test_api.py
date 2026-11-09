@@ -34,13 +34,17 @@ async def isolate_database():
 
 @pytest.mark.asyncio
 async def test_health_check():
+    await init_db()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/api/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ok"
-        assert data["service"] == "noesis"
+        for path in ["/health", "/api/health"]:
+            response = await client.get(path)
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] in ["ok", "degraded"]
+            assert data["service"] == "noesis"
+            assert data["database"] == "connected"
+
 
 
 @pytest.mark.asyncio

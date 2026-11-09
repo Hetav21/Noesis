@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlmodel import desc, select
 
-from app.db import engine, get_session, init_db
+from app.db import check_db_health, engine, get_session, init_db
 from app.models import JobStatus, ResearchJob, ResearchJobCreate, ResearchJobRead
 from app.services.research import ResearchWorkflow
 
@@ -40,25 +40,37 @@ allowed_origins = [
     "http://localhost:5175",
     "http://127.0.0.1:5173",
 ]
-extra_origins = os.getenv("ALLOWED_ORIGINS", "")
+extra_origins = os.getenv("ALLOWED_ORIGINS", "") or os.getenv("CORS_ORIGINS", "")
 if extra_origins:
-    allowed_origins.extend([o.strip() for o in extra_origins.split(",") if o.strip()])
+    for o in extra_origins.split(","):
+        cleaned = o.strip()
+        if cleaned and cleaned not in allowed_origins:
+            allowed_origins.append(cleaned)
+
+# Support custom origin regex or default to localhost and *.vercel.app deployments
+cors_regex = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$|^https://.*\.vercel\.app$",
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:[0-9]+)?",
+    allow_origin_regex=cors_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+@app.get("/health")
 @app.get("/api/health")
 async def health_check():
+    db_ok = await check_db_health()
     return {
-        "status": "ok",
+        "status": "ok" if db_ok else "degraded",
         "service": "noesis",
+        "database": "connected" if db_ok else "disconnected",
         "timestamp": datetime.now(UTC).isoformat(),
     }
 
@@ -168,6 +180,7 @@ async def get_suggestions(
         finally:
             _suggestions_inflight.pop(cache_key, None)
     except Exception as e:  # noqa: BLE001
+
         print(f"Suggestions generation note: {e}")
 
     return {"suggestions": default_suggestions}
@@ -232,7 +245,7 @@ async def run_research_task(job_id: str, query: str, depth: int, breadth: int):
                     job.logs = logs
                     await final_db.commit()
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"Error in research task: {e}")
             traceback.print_exc()
             async with session_factory() as err_db:

@@ -1,17 +1,23 @@
 /** @type {import('next').NextConfig} */
+const rawBackendUrl =
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "http://localhost:8000";
+
+// Normalize backend URL by removing trailing slashes and trailing /api
+const backendUrl = rawBackendUrl.replace(/\/+$/, "").replace(/\/api$/, "");
+
 const nextConfig = {
   reactStrictMode: true,
-  agentRules: false,
   async rewrites() {
     return [
       {
         source: "/api/:path*",
-        destination: process.env.BACKEND_URL
-          ? `${process.env.BACKEND_URL}/api/:path*`
-          : "http://localhost:8000/api/:path*",
+        destination: `${backendUrl}/api/:path*`,
       },
     ];
   },
 };
 
 export default nextConfig;
+

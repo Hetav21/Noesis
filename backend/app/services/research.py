@@ -144,7 +144,7 @@ class ResearchWorkflow:
     async def duckduckgo_search(self, query: str):
         try:
             return await asyncio.to_thread(self._sync_ddgs_search, query)
-        except Exception as ex:
+        except Exception as ex:  # noqa: BLE001
             await self._log(
                 {"type": "error", "message": f"Search error for '{query}': {ex!s}"}
             )
