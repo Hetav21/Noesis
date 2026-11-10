@@ -97,14 +97,6 @@ export const isNotFoundError = (err: unknown): boolean => {
   if (err && typeof err === "object" && "status" in err) {
     return (err as { status?: number }).status === 404;
   }
-  if (err instanceof Error) {
-    const msg = err.message.toLowerCase();
-    return (
-      msg.includes("private") ||
-      msg.includes("not exist") ||
-      msg.includes("not found")
-    );
-  }
   return false;
 };
 

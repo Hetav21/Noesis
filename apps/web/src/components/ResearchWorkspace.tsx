@@ -22,6 +22,7 @@ import {
   Copy,
   FolderInput,
   X,
+  AlertTriangle,
 } from "lucide-react";
 
 interface ResearchWorkspaceProps {
@@ -37,6 +38,9 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
   const [job, setJob] = useState<ResearchJob | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<"not_found" | "transient" | null>(
+    null,
+  );
   const [copiedLink, setCopiedLink] = useState(false);
   const [viewMode, setViewMode] = useState<WorkspaceViewMode>("report");
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -67,6 +71,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
         });
         statusRef.current = data.status;
         setError(null);
+        setErrorType(null);
 
         // If job is still running, switch to activity view to observe progress
         if (data.status === "running" || data.status === "queued") {
@@ -89,6 +94,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
         if (isNotFound) {
           statusRef.current = "error";
           setError(msg);
+          setErrorType("not_found");
           setIsLoading(false);
           return false;
         }
@@ -102,6 +108,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
         if (consecutiveErrorsRef.current >= maxTransientRetries) {
           statusRef.current = "error";
           setError(msg);
+          setErrorType("transient");
           setIsLoading(false);
           return false;
         }
@@ -325,18 +332,28 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
   }
 
   if (error || !job) {
+    const isTransient = errorType === "transient";
+
     return (
       <div className="max-w-md mx-auto my-auto p-8 text-center space-y-5">
         <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-white/[0.08] flex items-center justify-center mx-auto text-zinc-400">
-          <Lock className="w-5 h-5 text-zinc-400" />
+          {isTransient ? (
+            <AlertTriangle className="w-5 h-5 text-amber-400" />
+          ) : (
+            <Lock className="w-5 h-5 text-zinc-400" />
+          )}
         </div>
         <div className="space-y-1.5">
           <h2 className="text-lg font-semibold text-zinc-100">
-            Research Not Found or Private
+            {isTransient
+              ? "Unable to Connect to Research Session"
+              : "Research Not Found or Private"}
           </h2>
           <p className="text-xs text-zinc-400 leading-relaxed">
             {error ||
-              "This research session does not exist, has been deleted, or is set to private by its author."}
+              (isTransient
+                ? "The research server is temporarily unreachable. Check your connection or retry."
+                : "This research session does not exist, has been deleted, or is set to private by its author.")}
           </p>
         </div>
         <div className="flex items-center justify-center gap-2.5">
