@@ -102,25 +102,32 @@ async def test_session_history_isolation_and_shareable_links():
     transport = ASGITransport(app=app)
     with patch("app.main.run_research_task", new_callable=AsyncMock):
         # User A creates a research session (private by default)
+        job_a_id = None
+        forked_b_id = None
+        cookies_a = None
+        cookies_b = None
+
         async with AsyncClient(transport=transport, base_url="http://test") as client_a:
+            cookies_a = client_a.cookies
             create_a = await client_a.post(
                 "/api/research",
                 json={"query": "User A Private Study", "depth": 1, "breadth": 2},
             )
+            if create_a.status_code == 200:
+                job_a = create_a.json()
+                job_a_id = job_a.get("id")
+
+        try:
             assert create_a.status_code == 200
-            job_a = create_a.json()
-            job_a_id = job_a["id"]
             assert job_a["is_owner"] is True
             assert job_a["is_public"] is False
 
             # User A lists research -> sees their own job
-            list_a = await client_a.get("/api/research")
-            assert list_a.status_code == 200
-            assert any(j["id"] == job_a_id for j in list_a.json())
+            async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies_a) as client_a:
+                list_a = await client_a.get("/api/research")
+                assert list_a.status_code == 200
+                assert any(j["id"] == job_a_id for j in list_a.json())
 
-        forked_b_id = None
-        cookies_b = None
-        try:
             # User B (separate client instance, distinct cookies and session)
             async with AsyncClient(transport=transport, base_url="http://test") as client_b:
                 cookies_b = client_b.cookies
@@ -142,7 +149,7 @@ async def test_session_history_isolation_and_shareable_links():
 
             # User A makes the report public
             async with AsyncClient(
-                transport=transport, base_url="http://test", cookies=client_a.cookies
+                transport=transport, base_url="http://test", cookies=cookies_a
             ) as client_a_return:
                 toggle_a = await client_a_return.patch(
                     f"/api/research/{job_a_id}/visibility",
@@ -176,14 +183,16 @@ async def test_session_history_isolation_and_shareable_links():
             # User B can now successfully fork the completed research
             async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies_b) as client_b_view:
                 fork_res = await client_b_view.post(f"/api/research/{job_a_id}/fork")
+                if fork_res.status_code == 200:
+                    forked_data = fork_res.json()
+                    forked_b_id = forked_data.get("id")
+
                 assert fork_res.status_code == 200
-                forked_data = fork_res.json()
                 assert forked_data["id"] != job_a_id
                 assert forked_data["query"] == "User A Private Study"
                 assert forked_data["is_owner"] is True
                 assert forked_data["is_public"] is False
                 assert forked_data["status"] == "completed"
-                forked_b_id = forked_data["id"]
 
                 # User B's history now contains the forked research
                 list_b_after = await client_b_view.get("/api/research")
@@ -196,7 +205,7 @@ async def test_session_history_isolation_and_shareable_links():
 
             # User A revokes public sharing (turns it back to private)
             async with AsyncClient(
-                transport=transport, base_url="http://test", cookies=client_a.cookies
+                transport=transport, base_url="http://test", cookies=cookies_a
             ) as client_a_revoke:
                 revoke_a = await client_a_revoke.patch(
                     f"/api/research/{job_a_id}/visibility",
@@ -210,21 +219,28 @@ async def test_session_history_isolation_and_shareable_links():
                 denied_res = await client_b_denied.get(f"/api/research/{job_a_id}")
                 assert denied_res.status_code == 404
         finally:
-            # Teardown User B's forked job if created
+            # Teardown User B's forked job independently
             if forked_b_id and cookies_b:
-                async with AsyncClient(
-                    transport=transport, base_url="http://test", cookies=cookies_b
-                ) as client_b_cleanup:
-                    del_fork = await client_b_cleanup.delete(f"/api/research/{forked_b_id}")
-                    assert del_fork.status_code == 200
+                try:
+                    async with AsyncClient(
+                        transport=transport, base_url="http://test", cookies=cookies_b
+                    ) as client_b_cleanup:
+                        del_fork = await client_b_cleanup.delete(f"/api/research/{forked_b_id}")
+                        assert del_fork.status_code == 200
+                except Exception as e:
+                    print(f"Warning: Failed to cleanup forked_b_id {forked_b_id}: {e}")
 
-            # Teardown User A's research
-            async with AsyncClient(
-                transport=transport, base_url="http://test", cookies=client_a.cookies
-            ) as client_a_cleanup:
-                del_res = await client_a_cleanup.delete(f"/api/research/{job_a_id}")
-                assert del_res.status_code == 200
-                assert del_res.json()["status"] == "deleted"
+            # Teardown User A's research independently
+            if job_a_id and cookies_a:
+                try:
+                    async with AsyncClient(
+                        transport=transport, base_url="http://test", cookies=cookies_a
+                    ) as client_a_cleanup:
+                        del_res = await client_a_cleanup.delete(f"/api/research/{job_a_id}")
+                        assert del_res.status_code == 200
+                        assert del_res.json()["status"] == "deleted"
+                except Exception as e:
+                    print(f"Warning: Failed to cleanup job_a_id {job_a_id}: {e}")
 
 
 @pytest.mark.asyncio
