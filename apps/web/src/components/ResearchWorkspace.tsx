@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, type ResearchJob } from "@/lib/api";
+import { api, isNotFoundError, type ResearchJob } from "@/lib/api";
 import { ResearchLog } from "@/components/ResearchLog";
 import { ResearchResult } from "@/components/ResearchResult";
 import { Badge } from "@/components/ui/badge";
@@ -47,15 +47,17 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
   const [copyError, setCopyError] = useState<string | null>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
   const statusRef = useRef<string>("queued");
+  const consecutiveErrorsRef = useRef<number>(0);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const fetchJob = useCallback(
-    async (showLoading = false) => {
-      if (!jobId) return;
+    async (showLoading = false): Promise<boolean> => {
+      if (!jobId) return false;
       if (showLoading) setIsLoading(true);
       try {
         const data = await api.getResearch(jobId);
+        consecutiveErrorsRef.current = 0;
         // Prevent stale responses from overwriting completed or terminal job state
         setJob((prev) => {
           if (prev?.status === "completed" && data.status !== "completed") {
@@ -73,16 +75,39 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
           // Default to report view when completed
           setViewMode((prev) => (prev === "activity" ? "report" : prev));
         }
+        if (showLoading) setIsLoading(false);
+        return false;
       } catch (err: unknown) {
         console.warn("Research job fetch notice:", err);
         const msg =
           err instanceof Error
             ? err.message
             : "Research session could not be retrieved.";
-        setError(msg);
-        statusRef.current = "error";
-      } finally {
-        if (showLoading) setIsLoading(false);
+        const isNotFound = isNotFoundError(err);
+
+        // 404 / private / missing session is terminal: stop polling immediately and show error
+        if (isNotFound) {
+          statusRef.current = "error";
+          setError(msg);
+          if (showLoading) setIsLoading(false);
+          return false;
+        }
+
+        // For transient errors (e.g. temporary network drop, 5xx server glitch):
+        // Allow bounded consecutive retries without stopping polling or flipping
+        // an active research session into an error screen.
+        consecutiveErrorsRef.current += 1;
+        const maxTransientRetries = 5;
+
+        if (consecutiveErrorsRef.current >= maxTransientRetries) {
+          statusRef.current = "error";
+          setError(msg);
+          if (showLoading) setIsLoading(false);
+          return false;
+        }
+
+        // Return true to indicate a transient error occurred, allowing polling to back off
+        return true;
       }
     },
     [jobId],
@@ -92,13 +117,18 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
     let timeoutId: NodeJS.Timeout | null = null;
     let isCancelled = false;
 
+    consecutiveErrorsRef.current = 0;
+    statusRef.current = "queued";
+
     const poll = async (isInitial = false) => {
-      await fetchJob(isInitial);
+      const isTransientError = await fetchJob(isInitial);
       if (
         !isCancelled &&
         (statusRef.current === "running" || statusRef.current === "queued")
       ) {
-        timeoutId = setTimeout(() => poll(false), 1800);
+        // Schedule next poll after backoff delay on transient failure, or regular interval
+        const delay = isTransientError ? 3000 : 1800;
+        timeoutId = setTimeout(() => poll(false), delay);
       }
     };
 

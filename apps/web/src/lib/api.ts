@@ -80,6 +80,34 @@ export interface ResearchJob {
   is_public?: boolean;
 }
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+export const isNotFoundError = (err: unknown): boolean => {
+  if (err instanceof ApiError) {
+    return err.status === 404;
+  }
+  if (err && typeof err === "object" && "status" in err) {
+    return (err as { status?: number }).status === 404;
+  }
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase();
+    return (
+      msg.includes("private") ||
+      msg.includes("not exist") ||
+      msg.includes("not found")
+    );
+  }
+  return false;
+};
+
 export const api = {
   createResearch: async (config: ResearchConfig): Promise<ResearchJob> => {
     await ensureSession();
@@ -103,11 +131,16 @@ export const api = {
     });
     if (!res.ok) {
       if (res.status === 404) {
-        throw new Error(
+        throw new ApiError(
           "This research session does not exist or is set to private by its author.",
+          404,
         );
       }
-      throw new Error("Research job not found");
+      const err = await res.json().catch(() => ({}));
+      throw new ApiError(
+        err.detail || `Failed to fetch research session (${res.status})`,
+        res.status,
+      );
     }
     return res.json();
   },
