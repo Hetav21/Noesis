@@ -46,6 +46,8 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
   const [forkError, setForkError] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const statusRef = useRef<string>("queued");
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const fetchJob = useCallback(
     async (showLoading = false) => {
@@ -99,13 +101,60 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
   }, [fetchJob]);
 
   useEffect(() => {
+    if (!isShareOpen) return;
+
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+
+    const focusableSelector =
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    const focusTimer = setTimeout(() => {
+      if (dialogRef.current) {
+        const firstFocusable =
+          dialogRef.current.querySelector<HTMLElement>(focusableSelector);
+        if (firstFocusable) {
+          firstFocusable.focus();
+        } else {
+          dialogRef.current.focus();
+        }
+      }
+    }, 0);
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isShareOpen) {
+      if (e.key === "Escape") {
         setIsShareOpen(false);
+        return;
+      }
+
+      if (e.key === "Tab" && dialogRef.current) {
+        const focusableElements =
+          dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector);
+        if (focusableElements.length === 0) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+
+    return () => {
+      clearTimeout(focusTimer);
+      window.removeEventListener("keydown", handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
   }, [isShareOpen]);
 
   const handleCopyLink = async () => {
@@ -131,7 +180,10 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
     setJob((prev) => (prev ? { ...prev, is_public: newPublicState } : prev));
     try {
       const updated = await api.updateVisibility(job.id, newPublicState);
-      setJob(updated);
+      // Merge only the confirmed is_public status to prevent clobbering active polling results
+      setJob((prev) =>
+        prev ? { ...prev, is_public: updated.is_public } : prev,
+      );
     } catch (err) {
       console.error("Failed to toggle visibility", err);
       setVisibilityError(
@@ -317,6 +369,20 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
           </div>
         )}
 
+        {/* Copy Error Notice if any outside modal */}
+        {copyError && !isShareOpen && (
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-center justify-between">
+            <span>{copyError}</span>
+            <button
+              aria-label="Dismiss error"
+              onClick={() => setCopyError(null)}
+              className="text-rose-400 hover:text-rose-200 p-1"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Title & Metadata Card */}
         <div className="p-5 sm:p-6 rounded-2xl bg-[#121215] border border-white/[0.08] space-y-3">
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -428,10 +494,12 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
           onClick={() => setIsShareOpen(false)}
         >
           <div
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="share-dialog-title"
-            className="relative w-full max-w-md bg-[#121215] border border-white/[0.12] rounded-2xl shadow-2xl p-5 sm:p-6 space-y-5"
+            className="relative w-full max-w-md bg-[#121215] border border-white/[0.12] rounded-2xl shadow-2xl p-5 sm:p-6 space-y-5 focus:outline-none"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
