@@ -8,11 +8,12 @@ export interface ParsedSource {
 }
 
 /**
- * Escapes brackets inside Markdown link text to avoid breaking link syntax.
+ * Escapes backslashes and brackets inside Markdown link text to avoid breaking link syntax.
  */
 export function escapeMarkdownTitle(title: string): string {
-  return title.replace(/[[\]]/g, "\\$&");
+  return title.replace(/\\/g, "\\\\").replace(/[[\]]/g, "\\$&");
 }
+
 
 /**
  * Generates a clean URL slug from heading text compatible with standard GFM anchors.
