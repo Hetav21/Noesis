@@ -516,6 +516,12 @@ async def fork_research_job(
     if not source_job.is_public and not is_owner:
         raise HTTPException(status_code=404, detail="Research job not found")
 
+    if source_job.status in (JobStatus.QUEUED, JobStatus.RUNNING):
+        raise HTTPException(
+            status_code=409,
+            detail="Research is still in progress and cannot be imported yet.",
+        )
+
     forked_job = ResearchJob(
         id=str(uuid.uuid4()),
         query=source_job.query,

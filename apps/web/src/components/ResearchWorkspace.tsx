@@ -41,8 +41,10 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
   const [viewMode, setViewMode] = useState<WorkspaceViewMode>("report");
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
+  const [visibilityError, setVisibilityError] = useState<string | null>(null);
   const [isForking, setIsForking] = useState(false);
   const [forkError, setForkError] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const statusRef = useRef<string>("queued");
 
   const fetchJob = useCallback(
@@ -96,13 +98,26 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
     return () => clearInterval(interval);
   }, [fetchJob]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isShareOpen) {
+        setIsShareOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isShareOpen]);
+
   const handleCopyLink = async () => {
+    setCopyError(null);
     try {
       await navigator.clipboard.writeText(window.location.href);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
     } catch (err) {
       console.error("Failed to copy link", err);
+      setCopyError("Failed to copy link to clipboard.");
+      setTimeout(() => setCopyError(null), 3000);
     }
   };
 
@@ -110,6 +125,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
     if (!job || isUpdatingVisibility) return;
     const newPublicState = !job.is_public;
     setIsUpdatingVisibility(true);
+    setVisibilityError(null);
 
     // Optimistic local state update
     setJob((prev) => (prev ? { ...prev, is_public: newPublicState } : prev));
@@ -118,6 +134,9 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
       setJob(updated);
     } catch (err) {
       console.error("Failed to toggle visibility", err);
+      setVisibilityError(
+        err instanceof Error ? err.message : "Failed to update visibility.",
+      );
       // Rollback on failure
       setJob((prev) => (prev ? { ...prev, is_public: !newPublicState } : prev));
     } finally {
@@ -237,7 +256,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
           </Link>
 
           <div className="flex items-center gap-2">
-            {!isOwner && (
+            {!isOwner && (job.status === "completed" || job.status === "failed") && (
               <Button
                 variant="default"
                 size="sm"
@@ -289,6 +308,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
           <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-center justify-between">
             <span>{forkError}</span>
             <button
+              aria-label="Dismiss error"
               onClick={() => setForkError(null)}
               className="text-rose-400 hover:text-rose-200 p-1"
             >
@@ -408,6 +428,9 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
           onClick={() => setIsShareOpen(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-dialog-title"
             className="relative w-full max-w-md bg-[#121215] border border-white/[0.12] rounded-2xl shadow-2xl p-5 sm:p-6 space-y-5"
             onClick={(e) => e.stopPropagation()}
           >
@@ -418,7 +441,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                   <Share2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-white">
+                  <h3 id="share-dialog-title" className="text-sm font-semibold text-white">
                     Share Research
                   </h3>
                   <p className="text-[11px] text-zinc-400">
@@ -428,12 +451,27 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
               </div>
               <button
                 type="button"
+                aria-label="Close share dialog"
                 onClick={() => setIsShareOpen(false)}
                 className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Visibility Error Notice */}
+            {visibilityError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-center justify-between">
+                <span>{visibilityError}</span>
+                <button
+                  aria-label="Dismiss error"
+                  onClick={() => setVisibilityError(null)}
+                  className="text-rose-400 hover:text-rose-200 p-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             {/* Visibility Toggle Card */}
             <div className="p-4 rounded-xl bg-zinc-900/80 border border-white/[0.08] space-y-3">
@@ -482,6 +520,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                   type="button"
                   role="switch"
                   aria-checked={job.is_public}
+                  aria-label="Public link sharing"
                   disabled={isUpdatingVisibility}
                   onClick={handleToggleVisibility}
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -500,11 +539,12 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
             {/* Share Link Row (when public) */}
             {job.is_public ? (
               <div className="space-y-2">
-                <label className="text-[11px] font-medium text-zinc-400">
+                <label htmlFor="shareable-link-input" className="text-[11px] font-medium text-zinc-400">
                   Shareable link
                 </label>
                 <div className="flex items-center gap-2">
                   <input
+                    id="shareable-link-input"
                     type="text"
                     readOnly
                     value={
@@ -527,6 +567,9 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                     {copiedLink ? "Copied" : "Copy"}
                   </Button>
                 </div>
+                {copyError && (
+                  <p className="text-[11px] text-rose-400">{copyError}</p>
+                )}
                 <p className="text-[10px] text-zinc-500 leading-normal">
                   Tip: Anyone with this link can view the completed report and research steps without an account.
                 </p>

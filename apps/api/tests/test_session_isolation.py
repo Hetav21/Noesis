@@ -156,7 +156,21 @@ async def test_session_history_isolation_and_shareable_links():
             assert shared_data["is_owner"] is False
             assert shared_data["is_public"] is True
 
-            # User B imports / forks the shared research into their own session
+            # Attempt fork while still queued -> rejected with 409 Conflict
+            fork_active = await client_b_view.post(f"/api/research/{job_a_id}/fork")
+            assert fork_active.status_code == 409
+            assert "cannot be imported yet" in fork_active.json()["detail"]
+
+        # Mark source job as completed in DB
+        async with async_session() as db:
+            job_in_db = await db.get(ResearchJob, job_a_id)
+            assert job_in_db is not None
+            job_in_db.status = JobStatus.COMPLETED
+            job_in_db.result = "Completed study results"
+            await db.commit()
+
+        # User B can now successfully fork the completed research
+        async with AsyncClient(transport=transport, base_url="http://test", cookies=client_b.cookies) as client_b_view:
             fork_res = await client_b_view.post(f"/api/research/{job_a_id}/fork")
             assert fork_res.status_code == 200
             forked_data = fork_res.json()
@@ -164,6 +178,7 @@ async def test_session_history_isolation_and_shareable_links():
             assert forked_data["query"] == "User A Private Study"
             assert forked_data["is_owner"] is True
             assert forked_data["is_public"] is False
+            assert forked_data["status"] == "completed"
             forked_b_id = forked_data["id"]
 
             # User B's history now contains the forked research
