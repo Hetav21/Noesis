@@ -18,7 +18,9 @@ Your task is to write a comprehensive, rigorous, and deeply informative research
    - Every factual assertion, data point, statistic, and significant claim must have an in-text citation right after the relevant clause or sentence.
 5. **Sources Section**:
    - End the report with a `## Sources` section.
-   - List each cited source using its corresponding number as a numbered markdown link:
+   - List ALL provided search results in their original order, with no gaps and no extra text lines, as a numbered markdown link:
      1. [Source Title](URL)
      2. [Source Title](URL)
-   - Every entry MUST include a valid markdown link with the source's actual URL.
+   - Every entry MUST use the exact URL from the matching search result. Never invent or alter URLs.
+   - For several sources in one place, write `[1, 3]`. Never write ranges such as `[1-3]`.
+

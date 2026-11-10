@@ -3,6 +3,7 @@
 import React, { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
+import { useHashNavigation } from "@/lib/markdown";
 import { api, type ResearchJob } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Copy, Check, Download, Printer, ArrowUp } from "lucide-react";
@@ -36,28 +37,8 @@ export default function ResearchRawPage({ params }: RawPageProps) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Smoothly scroll to anchor target once the report content is ready or on hashchange
-  useEffect(() => {
-    if (!job?.result || typeof window === "undefined") return;
-
-    const scrollToHash = () => {
-      const hash = window.location.hash;
-      if (!hash) return;
-      const targetId = decodeURIComponent(hash.slice(1));
-      const targetEl = document.getElementById(targetId);
-      if (targetEl) {
-        targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    };
-
-    const timer = setTimeout(scrollToHash, 200);
-    window.addEventListener("hashchange", scrollToHash);
-
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("hashchange", scrollToHash);
-    };
-  }, [job?.result]);
+  // Smoothly scroll to anchor target once report content is ready or on hashchange
+  useHashNavigation(Boolean(job?.result));
 
   const handleCopy = async () => {
     if (!job?.result) return;
@@ -197,7 +178,15 @@ export default function ResearchRawPage({ params }: RawPageProps) {
         {showScrollTop && (
           <button
             type="button"
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            onClick={() => {
+              const prefersReducedMotion =
+                typeof window.matchMedia === "function" &&
+                window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+              window.scrollTo({
+                top: 0,
+                behavior: prefersReducedMotion ? "auto" : "smooth",
+              });
+            }}
             className="fixed bottom-6 right-6 p-2.5 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 shadow-lg backdrop-blur-sm transition-all print:hidden cursor-pointer"
             title="Scroll to top"
             aria-label="Scroll to top"

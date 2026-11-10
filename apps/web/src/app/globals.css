@@ -227,3 +227,11 @@
   scroll-margin-top: 6rem;
 }
 
+@media print {
+  .markdown-body,
+  .markdown-body * {
+    color: #000 !important;
+    background: transparent !important;
+  }
+}
+

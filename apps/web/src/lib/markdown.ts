@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 export interface ParsedSource {
   index: number;
@@ -8,16 +8,23 @@ export interface ParsedSource {
 }
 
 /**
+ * Escapes brackets inside Markdown link text to avoid breaking link syntax.
+ */
+export function escapeMarkdownTitle(title: string): string {
+  return title.replace(/[[\]]/g, "\\$&");
+}
+
+/**
  * Generates a clean URL slug from heading text compatible with standard GFM anchors.
+ * Preserves Unicode letters and numbers while removing punctuation, without collapsing repeated hyphens.
  */
 export function slugify(text: string): string {
   return text
     .toString()
-    .toLowerCase()
     .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}\p{Pc}\s-]/gu, "")
+    .replace(/\s/g, "-")
     .replace(/^-+/, "")
     .replace(/-+$/, "");
 }
@@ -72,6 +79,63 @@ export function extractDomain(url: string): string {
 }
 
 /**
+ * Smoothly scrolls to an element by its ID or hash, respecting prefers-reduced-motion
+ * and safely handling malformed URI components.
+ */
+export function scrollToHashTarget(hashOrId: string, pushState = false): boolean {
+  if (typeof window === "undefined" || !hashOrId) return false;
+  try {
+    const rawId = hashOrId.startsWith("#") ? hashOrId.slice(1) : hashOrId;
+    const targetId = decodeURIComponent(rawId);
+    if (!targetId) return false;
+    const targetEl = document.getElementById(targetId);
+    if (targetEl) {
+      const prefersReducedMotion =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      targetEl.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "start",
+      });
+      if (pushState) {
+        window.history.pushState(null, "", `#${targetId}`);
+      }
+      return true;
+    }
+  } catch {
+    // Ignore malformed URI components
+  }
+  return false;
+}
+
+/**
+ * React hook to automatically scroll to the URL hash once content is ready,
+ * and listen for subsequent hashchange events without artificial fixed delays.
+ */
+export function useHashNavigation(isReady: boolean): void {
+  useEffect(() => {
+    if (!isReady || typeof window === "undefined") return;
+
+    const onHashChange = () => {
+      if (window.location.hash) {
+        scrollToHashTarget(window.location.hash);
+      }
+    };
+
+    if (window.location.hash) {
+      if (!scrollToHashTarget(window.location.hash)) {
+        requestAnimationFrame(() => {
+          scrollToHashTarget(window.location.hash);
+        });
+      }
+    }
+
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [isReady]);
+}
+
+/**
  * Normalizes research reports so that:
  * 1. Headings and Table of Contents anchors align properly.
  * 2. Unlinked or parenthetical citations (e.g., "(Stanford HAI)", "(IBM; Google Cloud)", "[1]")
@@ -106,12 +170,17 @@ export function normalizeReportMarkdown(text: string): {
 
   for (let i = 0; i < rawLines.length; i++) {
     const line = rawLines[i].trim();
+    const explicit = line.match(/^(?:\[\[)?(\d+)(?:[.)\]]|\]\])/);
+    const index = explicit ? parseInt(explicit[1], 10) : sources.length + 1;
 
     // Markdown link: [Title](URL) or 1. [Title](URL) or [[1]](#source-1) [Title](URL)
-    const mdLink = line.match(/(?:\[\[?\d+\]?\]\(#[^\)]+\)\s*)?\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/);
+    // Supports one level of balanced parentheses in the URL
+    const mdLink = line.match(
+      /(?:\[\[?\d+\]?\]\(#[^)]+\)\s*)?\[([^\]]+)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))+)\)/,
+    );
     if (mdLink) {
       sources.push({
-        index: i + 1,
+        index,
         title: mdLink[1].trim(),
         url: mdLink[2].trim(),
         domain: extractDomain(mdLink[2].trim()),
@@ -121,11 +190,11 @@ export function normalizeReportMarkdown(text: string): {
 
     // Text with URL: - Title: URL or 1. Title: URL or Title - URL
     const namedUrl = line.match(
-      /^(?:[-*•\d\.\)]+\s*)(.*?)(?::\s*|\s*-\s*|\s+)(https?:\/\/[^\s\)]+)/,
+      /^(?:[-*•\d\.\)]+\s*)(.*?)(?::\s*|\s*-\s*|\s+)(https?:\/\/(?:[^\s()]|\([^\s()]*\))+)/,
     );
     if (namedUrl) {
       sources.push({
-        index: i + 1,
+        index,
         title: namedUrl[1].trim(),
         url: namedUrl[2].trim(),
         domain: extractDomain(namedUrl[2].trim()),
@@ -134,11 +203,11 @@ export function normalizeReportMarkdown(text: string): {
     }
 
     // Bare URL
-    const bareUrl = line.match(/(https?:\/\/[^\s\)]+)/);
+    const bareUrl = line.match(/(https?:\/\/(?:[^\s()]|\([^\s()]*\))+)/);
     if (bareUrl) {
       sources.push({
-        index: i + 1,
-        title: `Source ${i + 1}`,
+        index,
+        title: `Source ${index}`,
         url: bareUrl[1].trim(),
         domain: extractDomain(bareUrl[1].trim()),
       });
@@ -148,6 +217,8 @@ export function normalizeReportMarkdown(text: string): {
   if (sources.length === 0) {
     return { normalized: text, sources: [] };
   }
+
+  const validIndexes = new Set(sources.map((s) => s.index));
 
   // Build title lookup for matching parenthetical citations
   const titleToSource = new Map<string, ParsedSource>();
@@ -159,53 +230,64 @@ export function normalizeReportMarkdown(text: string): {
     }
   }
 
-  // Process the body content before ## Sources
+  // Process the body content before ## Sources outside fenced code and inline code
   let body = text.slice(0, sourcesStart);
+  const citationRe =
+    /(?<!\[)(?<!\!)\[([1-9]\d*(?:\s*,\s*[1-9]\d*)*)\](?!\()(?!:)/g;
 
-  // 1. Replace parenthetical citations like "(Stanford HAI)" or "(IBM; Google Cloud)"
-  body = body.replace(/\(([^()\n]{2,80})\)/g, (fullMatch, inner) => {
-    // Avoid replacing anything inside links or standard text unless all parts match sources
-    const parts = inner.split(/[;,]\s*/).map((p: string) => p.trim());
-    const matched: ParsedSource[] = [];
-    for (const part of parts) {
-      const s = titleToSource.get(part.toLowerCase());
-      if (s) {
-        matched.push(s);
+  body = body
+    .split(/(```[\s\S]*?```|`[^`\n]+`)/)
+    .map((segment, idx) => {
+      if (idx % 2 === 1) {
+        return segment; // Code block or span: leave untouched
       }
-    }
-    if (matched.length > 0 && matched.length === parts.length) {
-      return matched
-        .map((m) => ` [[${m.index}]](#source-${m.index})`)
-        .join("");
-    }
-    return fullMatch;
-  });
 
-  // 2. Replace unlinked bracket citations like "[1]" or "[1, 2]" or "[1][2]"
-  // Avoid replacing markdown links [1](...) or images ![1] or footnote defs [1]:
-  body = body.replace(
-    /(?<!\[)(?<!\!)\[(\d+(?:\s*,\s*\d+)*)\](?!\()(?!:)/g,
-    (fullMatch, nums) => {
-      const splitNums = nums
-        .split(/\s*,\s*/)
-        .map((n: string) => parseInt(n, 10))
-        .filter((n: number) => !isNaN(n));
-      if (
-        splitNums.length > 0 &&
-        splitNums.every((n: number) => n <= sources.length)
-      ) {
-        return splitNums
-          .map((n: number) => ` [[${n}]](#source-${n})`)
-          .join("");
-      }
-      return fullMatch;
-    },
-  );
+      // 1. Replace parenthetical citations like "(Stanford HAI)" or "(IBM; Google Cloud)"
+      let processed = segment.replace(
+        /\(([^()\n]{2,80})\)/g,
+        (fullMatch, inner) => {
+          const parts = inner.split(/[;,]\s*/).map((p: string) => p.trim());
+          const matched: ParsedSource[] = [];
+          for (const part of parts) {
+            const s = titleToSource.get(part.toLowerCase());
+            if (s) {
+              matched.push(s);
+            }
+          }
+          if (matched.length > 0 && matched.length === parts.length) {
+            return matched
+              .map((m) => `[[${m.index}]](#source-${m.index})`)
+              .join(" ");
+          }
+          return fullMatch;
+        },
+      );
+
+      // 2. Replace unlinked bracket citations like "[1]" or "[1, 2]"
+      processed = processed.replace(citationRe, (fullMatch, nums) => {
+        const splitNums = nums
+          .split(/\s*,\s*/)
+          .map((n: string) => parseInt(n, 10))
+          .filter((n: number) => !isNaN(n));
+        if (
+          splitNums.length > 0 &&
+          splitNums.every((n: number) => validIndexes.has(n))
+        ) {
+          return splitNums
+            .map((n: number) => `[[${n}]](#source-${n})`)
+            .join(" ");
+        }
+        return fullMatch;
+      });
+
+      return processed;
+    })
+    .join("");
 
   // 3. Format the ## Sources section into clean numbered items with source anchors
   let newSourcesSection = `${header}\n`;
   for (const s of sources) {
-    newSourcesSection += `${s.index}. [[${s.index}]](#source-${s.index}) [${s.title}](${s.url})\n`;
+    newSourcesSection += `${s.index}. [[${s.index}]](#source-${s.index}) [${escapeMarkdownTitle(s.title)}](${s.url})\n`;
   }
   newSourcesSection += "\n";
 

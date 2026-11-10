@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { useHashNavigation } from "@/lib/markdown";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import {
@@ -48,22 +49,8 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Smoothly scroll to hash if present in URL on mount / result load
-  useEffect(() => {
-    if (!result || typeof window === "undefined") return;
-    const hash = window.location.hash;
-    if (!hash) return;
-
-    const timer = setTimeout(() => {
-      const targetId = decodeURIComponent(hash.slice(1));
-      const targetEl = document.getElementById(targetId);
-      if (targetEl) {
-        targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }, 150);
-
-    return () => clearTimeout(timer);
-  }, [result]);
+  // Automatically scroll to target anchor once report content is ready
+  useHashNavigation(Boolean(result));
 
   const handleCopy = async () => {
     if (!result) return;

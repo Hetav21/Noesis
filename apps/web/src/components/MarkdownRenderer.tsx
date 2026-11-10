@@ -8,6 +8,7 @@ import {
   getHeadingSlugs,
   getNodeText,
   extractDomain,
+  scrollToHashTarget,
 } from "@/lib/markdown";
 import { ExternalLink, Copy, Check, Hash } from "lucide-react";
 
@@ -16,34 +17,126 @@ interface MarkdownRendererProps {
   className?: string;
 }
 
+interface HeadingProps {
+  level: 1 | 2 | 3;
+  className: string;
+  iconSizeClass?: string;
+  children: React.ReactNode;
+  onScrollToTarget: (href: string) => void;
+  slugTracker: Map<string, number>;
+}
+
+const Heading: React.FC<HeadingProps> = ({
+  level,
+  className,
+  iconSizeClass = "w-4 h-4",
+  children,
+  onScrollToTarget,
+  slugTracker,
+}) => {
+  const text = getNodeText(children);
+  const rawSlugs = getHeadingSlugs(text);
+  const baseSlug = rawSlugs[0] || `section-${level}`;
+
+  // Track occurrences of identical heading titles within the render
+  const count = slugTracker.get(baseSlug) || 0;
+  slugTracker.set(baseSlug, count + 1);
+  const primaryId = count === 0 ? baseSlug : `${baseSlug}-${count}`;
+
+  const secondarySlugs =
+    count === 0 ? rawSlugs.filter((s) => s !== primaryId) : [];
+  const Tag = `h${level}` as const;
+
+  return (
+    <div className={`relative group/h${level}`}>
+      {secondarySlugs.map((slug) => (
+        <span
+          key={slug}
+          id={slug}
+          className="scroll-mt-24 pointer-events-none"
+          aria-hidden="true"
+        />
+      ))}
+      <Tag
+        id={primaryId}
+        className={`${className} flex items-center justify-between`}
+      >
+        <span>{children}</span>
+        {primaryId && (
+          <a
+            href={`#${primaryId}`}
+            onClick={(e) => {
+              e.preventDefault();
+              onScrollToTarget(`#${primaryId}`);
+            }}
+            className={`opacity-0 group-hover/h${level}:opacity-100 focus-visible:opacity-100 text-zinc-500 hover:text-zinc-200 transition-opacity p-1`}
+            title="Link to section"
+            aria-label="Link to section"
+          >
+            <Hash className={iconSizeClass} />
+          </a>
+        )}
+      </Tag>
+    </div>
+  );
+};
+
+const CodeBlock: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [copied, setCopied] = useState(false);
+  const codeText = getNodeText(children);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(codeText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy code", err);
+    }
+  };
+
+  return (
+    <div className="relative group/code my-5 rounded-xl border border-white/[0.08] bg-[#101014] overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-zinc-900/40 text-[11px] font-mono text-zinc-400">
+        <span>code</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex items-center gap-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+        >
+          {copied ? (
+            <>
+              <Check className="w-3 h-3 text-emerald-400" />
+              <span className="text-emerald-400">Copied</span>
+            </>
+          ) : (
+            <>
+              <Copy className="w-3 h-3" />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <pre className="p-4 overflow-x-auto text-xs sm:text-sm font-mono text-zinc-200 leading-relaxed bg-transparent">
+        {children}
+      </pre>
+    </div>
+  );
+};
+
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   className = "",
 }) => {
-  const [copiedCodeIndex, setCopiedCodeIndex] = useState<number | null>(null);
-
   const { normalized } = useMemo(() => {
     return normalizeReportMarkdown(content);
   }, [content]);
 
-  const handleScrollToTarget = (href: string) => {
-    if (!href.startsWith("#")) return;
-    const targetId = decodeURIComponent(href.slice(1));
-    const el = document.getElementById(targetId);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-      window.history.pushState(null, "", href);
-    }
-  };
+  // Track heading IDs across each render pass for duplicate heading resolution
+  const slugTracker = useMemo(() => new Map<string, number>(), [normalized]);
 
-  const handleCopyCode = async (codeText: string, index: number) => {
-    try {
-      await navigator.clipboard.writeText(codeText);
-      setCopiedCodeIndex(index);
-      setTimeout(() => setCopiedCodeIndex(null), 2000);
-    } catch (err) {
-      console.error("Failed to copy code", err);
-    }
+  const handleScrollToTarget = (href: string) => {
+    scrollToHashTarget(href, true);
   };
 
   return (
@@ -51,128 +144,41 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          h1: ({ children, ...props }) => {
-            const text = getNodeText(children);
-            const slugs = getHeadingSlugs(text);
-            const primaryId = slugs[0];
-            const secondarySlugs = slugs.filter((s) => s !== primaryId);
+          h1: ({ children }) => (
+            <Heading
+              level={1}
+              className="scroll-mt-24 text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight mt-8 mb-4 pb-2 border-b border-white/[0.08]"
+              iconSizeClass="w-4 h-4"
+              onScrollToTarget={handleScrollToTarget}
+              slugTracker={slugTracker}
+            >
+              {children}
+            </Heading>
+          ),
 
-            return (
-              <div className="relative group/h1">
-                {secondarySlugs.map((slug) => (
-                  <span
-                    key={slug}
-                    id={slug}
-                    className="scroll-mt-24 pointer-events-none"
-                    aria-hidden="true"
-                  />
-                ))}
-                <h1
-                  id={primaryId}
-                  className="scroll-mt-24 text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight mt-8 mb-4 pb-2 border-b border-white/[0.08] flex items-center justify-between"
-                  {...props}
-                >
-                  <span>{children}</span>
-                  {primaryId && (
-                    <a
-                      href={`#${primaryId}`}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleScrollToTarget(`#${primaryId}`);
-                      }}
-                      className="opacity-0 group-hover/h1:opacity-100 text-zinc-500 hover:text-zinc-200 transition-opacity p-1"
-                      title="Copy section link"
-                      aria-label="Link to section"
-                    >
-                      <Hash className="w-4 h-4" />
-                    </a>
-                  )}
-                </h1>
-              </div>
-            );
-          },
+          h2: ({ children }) => (
+            <Heading
+              level={2}
+              className="scroll-mt-24 text-xl sm:text-2xl font-semibold tracking-tight text-zinc-100 mt-8 mb-3 pb-1.5 border-b border-white/[0.04]"
+              iconSizeClass="w-4 h-4"
+              onScrollToTarget={handleScrollToTarget}
+              slugTracker={slugTracker}
+            >
+              {children}
+            </Heading>
+          ),
 
-          h2: ({ children, ...props }) => {
-            const text = getNodeText(children);
-            const slugs = getHeadingSlugs(text);
-            const primaryId = slugs[0];
-            const secondarySlugs = slugs.filter((s) => s !== primaryId);
-
-            return (
-              <div className="relative group/h2">
-                {secondarySlugs.map((slug) => (
-                  <span
-                    key={slug}
-                    id={slug}
-                    className="scroll-mt-24 pointer-events-none"
-                    aria-hidden="true"
-                  />
-                ))}
-                <h2
-                  id={primaryId}
-                  className="scroll-mt-24 text-xl sm:text-2xl font-semibold tracking-tight text-zinc-100 mt-8 mb-3 pb-1.5 border-b border-white/[0.04] flex items-center justify-between"
-                  {...props}
-                >
-                  <span>{children}</span>
-                  {primaryId && (
-                    <a
-                      href={`#${primaryId}`}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleScrollToTarget(`#${primaryId}`);
-                      }}
-                      className="opacity-0 group-hover/h2:opacity-100 text-zinc-500 hover:text-zinc-200 transition-opacity p-1"
-                      title="Copy section link"
-                      aria-label="Link to section"
-                    >
-                      <Hash className="w-4 h-4" />
-                    </a>
-                  )}
-                </h2>
-              </div>
-            );
-          },
-
-          h3: ({ children, ...props }) => {
-            const text = getNodeText(children);
-            const slugs = getHeadingSlugs(text);
-            const primaryId = slugs[0];
-            const secondarySlugs = slugs.filter((s) => s !== primaryId);
-
-            return (
-              <div className="relative group/h3">
-                {secondarySlugs.map((slug) => (
-                  <span
-                    key={slug}
-                    id={slug}
-                    className="scroll-mt-24 pointer-events-none"
-                    aria-hidden="true"
-                  />
-                ))}
-                <h3
-                  id={primaryId}
-                  className="scroll-mt-24 text-lg font-semibold text-zinc-200 mt-6 mb-2.5 flex items-center justify-between"
-                  {...props}
-                >
-                  <span>{children}</span>
-                  {primaryId && (
-                    <a
-                      href={`#${primaryId}`}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleScrollToTarget(`#${primaryId}`);
-                      }}
-                      className="opacity-0 group-hover/h3:opacity-100 text-zinc-500 hover:text-zinc-200 transition-opacity p-1"
-                      title="Copy section link"
-                      aria-label="Link to section"
-                    >
-                      <Hash className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                </h3>
-              </div>
-            );
-          },
+          h3: ({ children }) => (
+            <Heading
+              level={3}
+              className="scroll-mt-24 text-lg font-semibold text-zinc-200 mt-6 mb-2.5"
+              iconSizeClass="w-3.5 h-3.5"
+              onScrollToTarget={handleScrollToTarget}
+              slugTracker={slugTracker}
+            >
+              {children}
+            </Heading>
+          ),
 
           h4: ({ children, ...props }) => {
             const text = getNodeText(children);
@@ -250,43 +256,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             );
           },
 
-          pre: ({ children, ...props }) => {
-            const codeText = getNodeText(children);
-            const codeIndex = Math.abs(
-              codeText.split("").reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) | 0, 0),
-            );
-
-            return (
-              <div className="relative group/code my-5 rounded-xl border border-white/[0.08] bg-[#101014] overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-zinc-900/40 text-[11px] font-mono text-zinc-400">
-                  <span>code</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyCode(codeText, codeIndex)}
-                    className="inline-flex items-center gap-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                  >
-                    {copiedCodeIndex === codeIndex ? (
-                      <>
-                        <Check className="w-3 h-3 text-emerald-400" />
-                        <span className="text-emerald-400">Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3" />
-                        <span>Copy</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                <pre
-                  className="p-4 overflow-x-auto text-xs sm:text-sm font-mono text-zinc-200 leading-relaxed bg-transparent"
-                  {...props}
-                >
-                  {children}
-                </pre>
-              </div>
-            );
-          },
+          pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
 
           table: ({ children, ...props }) => (
             <div className="my-6 overflow-x-auto rounded-xl border border-white/[0.08] bg-[#101014]">
