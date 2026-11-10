@@ -75,7 +75,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
           // Default to report view when completed
           setViewMode((prev) => (prev === "activity" ? "report" : prev));
         }
-        if (showLoading) setIsLoading(false);
+        setIsLoading(false);
         return false;
       } catch (err: unknown) {
         console.warn("Research job fetch notice:", err);
@@ -85,11 +85,11 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
             : "Research session could not be retrieved.";
         const isNotFound = isNotFoundError(err);
 
-        // 404 / private / missing session is terminal: stop polling immediately and show error
+        // 404 / private / missing session is terminal: stop polling immediately, clear loading, and show error
         if (isNotFound) {
           statusRef.current = "error";
           setError(msg);
-          if (showLoading) setIsLoading(false);
+          setIsLoading(false);
           return false;
         }
 
@@ -102,7 +102,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
         if (consecutiveErrorsRef.current >= maxTransientRetries) {
           statusRef.current = "error";
           setError(msg);
-          if (showLoading) setIsLoading(false);
+          setIsLoading(false);
           return false;
         }
 
