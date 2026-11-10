@@ -45,6 +45,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
   const [isForking, setIsForking] = useState(false);
   const [forkError, setForkError] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [retryTrigger, setRetryTrigger] = useState(0);
   const statusRef = useRef<string>("queued");
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -79,6 +80,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
             ? err.message
             : "Research session could not be retrieved.";
         setError(msg);
+        statusRef.current = "error";
       } finally {
         if (showLoading) setIsLoading(false);
       }
@@ -87,18 +89,26 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
   );
 
   useEffect(() => {
-    fetchJob(true);
+    let timeoutId: NodeJS.Timeout | null = null;
+    let isCancelled = false;
 
-    const interval = setInterval(() => {
-      if (statusRef.current === "running" || statusRef.current === "queued") {
-        fetchJob(false);
-      } else {
-        clearInterval(interval);
+    const poll = async (isInitial = false) => {
+      await fetchJob(isInitial);
+      if (
+        !isCancelled &&
+        (statusRef.current === "running" || statusRef.current === "queued")
+      ) {
+        timeoutId = setTimeout(() => poll(false), 1800);
       }
-    }, 1800);
+    };
 
-    return () => clearInterval(interval);
-  }, [fetchJob]);
+    poll(true);
+
+    return () => {
+      isCancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [fetchJob, retryTrigger]);
 
   useEffect(() => {
     if (!isShareOpen) return;
@@ -303,7 +313,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchJob(true)}
+            onClick={() => setRetryTrigger((prev) => prev + 1)}
             leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
           >
             Retry
