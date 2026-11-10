@@ -133,14 +133,30 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
 
         const firstElement = focusableElements[0];
         const lastElement = focusableElements[focusableElements.length - 1];
+        const currentActive = document.activeElement as HTMLElement | null;
+
+        // If focus left the dialog or is on the container (e.g. control was disabled during update)
+        if (
+          !currentActive ||
+          !dialogRef.current.contains(currentActive) ||
+          currentActive === dialogRef.current
+        ) {
+          e.preventDefault();
+          if (e.shiftKey) {
+            lastElement.focus();
+          } else {
+            firstElement.focus();
+          }
+          return;
+        }
 
         if (e.shiftKey) {
-          if (document.activeElement === firstElement) {
+          if (currentActive === firstElement) {
             e.preventDefault();
             lastElement.focus();
           }
         } else {
-          if (document.activeElement === lastElement) {
+          if (currentActive === lastElement) {
             e.preventDefault();
             firstElement.focus();
           }
@@ -148,11 +164,25 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
       }
     };
 
+    const handleFocusIn = (e: FocusEvent) => {
+      if (dialogRef.current && !dialogRef.current.contains(e.target as Node)) {
+        const focusableElements =
+          dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector);
+        if (focusableElements.length > 0) {
+          focusableElements[0].focus();
+        } else {
+          dialogRef.current.focus();
+        }
+      }
+    };
+
     window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("focusin", handleFocusIn);
 
     return () => {
       clearTimeout(focusTimer);
       window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("focusin", handleFocusIn);
       previousFocusRef.current?.focus();
     };
   }, [isShareOpen]);
