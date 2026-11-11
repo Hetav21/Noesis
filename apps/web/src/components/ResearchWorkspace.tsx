@@ -51,6 +51,8 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
   const statusRef = useRef<string>("queued");
   const consecutiveErrorsRef = useRef<number>(0);
   const visibilityRequestIdRef = useRef<number>(0);
+  const confirmedIsPublicRef = useRef<boolean>(false);
+  const visibilityMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const fetchJob = useCallback(
     async (showLoading = false): Promise<boolean> => {
@@ -59,6 +61,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
       try {
         const data = await api.getResearch(jobId);
         consecutiveErrorsRef.current = 0;
+        confirmedIsPublicRef.current = Boolean(data.is_public);
         // Prevent stale responses from overwriting completed or terminal job state
         setJob((prev) => {
           if (prev?.status === "completed" && data.status !== "completed") {
@@ -144,7 +147,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
     };
   }, [fetchJob, retryTrigger]);
 
-  const tryFallbackCopy = () => {
+  const tryFallbackCopy = (): boolean => {
     try {
       const textArea = document.createElement("textarea");
       textArea.value = window.location.href;
@@ -154,30 +157,36 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
       document.body.appendChild(textArea);
       textArea.focus();
       textArea.select();
-      document.execCommand("copy");
+      const successful = document.execCommand("copy");
       document.body.removeChild(textArea);
+      return successful;
     } catch {
-      // ignore clipboard fallback errors
+      return false;
     }
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     setCopyError(null);
-    if (typeof window !== "undefined") {
+    if (typeof window === "undefined") return;
+
+    let success = false;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(window.location.href);
+        success = true;
+      } else {
+        success = tryFallbackCopy();
+      }
+    } catch {
+      success = tryFallbackCopy();
+    }
+
+    if (success) {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
-
-      try {
-        if (navigator?.clipboard?.writeText) {
-          navigator.clipboard.writeText(window.location.href).catch(() => {
-            tryFallbackCopy();
-          });
-        } else {
-          tryFallbackCopy();
-        }
-      } catch {
-        tryFallbackCopy();
-      }
+    } else {
+      setCopyError("Failed to copy link to clipboard.");
+      setTimeout(() => setCopyError(null), 3000);
     }
   };
 
@@ -191,27 +200,34 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
     // Instant optimistic update (0ms UI latency)
     setJob((prev) => (prev ? { ...prev, is_public: nextState } : prev));
 
-    try {
-      const updated = await api.updateVisibility(job.id, nextState);
-      if (visibilityRequestIdRef.current === currentRequestId) {
-        setJob((prev) =>
-          prev ? { ...prev, is_public: updated.is_public } : prev,
-        );
-      }
-    } catch (err) {
-      console.error("Failed to toggle visibility", err);
-      if (visibilityRequestIdRef.current === currentRequestId) {
-        // Rollback on failure
-        setJob((prev) => (prev ? { ...prev, is_public: !nextState } : prev));
-        setVisibilityError(
-          err instanceof Error ? err.message : "Failed to update visibility.",
-        );
-      }
-    } finally {
-      if (visibilityRequestIdRef.current === currentRequestId) {
-        setIsUpdatingVisibility(false);
-      }
-    }
+    // Serialize network PATCH requests so writes commit in user-action order
+    visibilityMutationQueueRef.current = visibilityMutationQueueRef.current
+      .then(async () => {
+        const updated = await api.updateVisibility(job.id, nextState);
+        confirmedIsPublicRef.current = Boolean(updated.is_public);
+        if (visibilityRequestIdRef.current === currentRequestId) {
+          setJob((prev) =>
+            prev ? { ...prev, is_public: updated.is_public } : prev,
+          );
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to toggle visibility", err);
+        if (visibilityRequestIdRef.current === currentRequestId) {
+          // Rollback to last server-confirmed state on failure
+          setJob((prev) =>
+            prev ? { ...prev, is_public: confirmedIsPublicRef.current } : prev,
+          );
+          setVisibilityError(
+            err instanceof Error ? err.message : "Failed to update visibility.",
+          );
+        }
+      })
+      .finally(() => {
+        if (visibilityRequestIdRef.current === currentRequestId) {
+          setIsUpdatingVisibility(false);
+        }
+      });
   };
 
   const handleFork = async () => {
@@ -335,10 +351,12 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
             <span>All Research</span>
           </Link>
 
-          {isCompleted && (
-            <div className="flex items-center gap-2">
-              {isOwner ? (
-                <div className="flex items-center gap-2">
+          {/* Session Actions (Share, Public Toggle, Fork) */}
+          <div className="flex items-center gap-2">
+            {isOwner ? (
+              <div className="flex items-center gap-2">
+                {/* Share button is restricted to completed sessions */}
+                {isCompleted && (
                   <Button
                     variant="default"
                     size="sm"
@@ -354,26 +372,22 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                   >
                     {copiedLink ? "Copied" : "Share"}
                   </Button>
+                )}
 
-                  {/* Public Toggle */}
-                  <div
-                    role="button"
-                    tabIndex={0}
+                {/* Public Toggle: available for completed sessions, or at any status if session is already public to allow revocation */}
+                {(isCompleted || job.is_public) && (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={job.is_public}
+                    aria-busy={isUpdatingVisibility}
+                    aria-label="Toggle public link sharing"
                     onClick={handleToggleVisibility}
-                    onKeyDown={(e) => {
-                      if (e.key === " " || e.key === "Enter") {
-                        e.preventDefault();
-                        handleToggleVisibility();
-                      }
-                    }}
                     className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800/80 border border-white/[0.08] hover:border-white/[0.15] text-xs select-none cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-zinc-400"
                   >
                     <span className="text-xs font-medium text-zinc-300">Public</span>
                     <span
-                      role="switch"
-                      aria-checked={job.is_public}
-                      aria-busy={isUpdatingVisibility}
-                      aria-label="Toggle public link sharing"
+                      aria-hidden="true"
                       className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
                         job.is_public ? "bg-emerald-500" : "bg-zinc-700"
                       }`}
@@ -384,38 +398,38 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                         }`}
                       />
                     </span>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    isLoading={isForking}
-                    onClick={handleFork}
-                    leftIcon={<FolderInput className="w-3.5 h-3.5" />}
-                    className="bg-white text-zinc-950 hover:bg-zinc-100 shadow-sm font-medium"
-                  >
-                    Import to my sessions
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopyLink}
-                    leftIcon={
-                      copiedLink ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <Share2 className="w-3.5 h-3.5" />
-                      )
-                    }
-                  >
-                    {copiedLink ? "Copied" : "Share"}
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
+                  </button>
+                )}
+              </div>
+            ) : isCompleted ? (
+              <>
+                <Button
+                  variant="default"
+                  size="sm"
+                  isLoading={isForking}
+                  onClick={handleFork}
+                  leftIcon={<FolderInput className="w-3.5 h-3.5" />}
+                  className="bg-white text-zinc-950 hover:bg-zinc-100 shadow-sm font-medium"
+                >
+                  Import to my sessions
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyLink}
+                  leftIcon={
+                    copiedLink ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <Share2 className="w-3.5 h-3.5" />
+                    )
+                  }
+                >
+                  {copiedLink ? "Copied" : "Share"}
+                </Button>
+              </>
+            ) : null}
+          </div>
         </div>
 
         {/* Visibility Error Notice */}
