@@ -50,6 +50,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
   const [retryTrigger, setRetryTrigger] = useState(0);
   const statusRef = useRef<string>("queued");
   const consecutiveErrorsRef = useRef<number>(0);
+  const visibilityRequestIdRef = useRef<number>(0);
 
   const fetchJob = useCallback(
     async (showLoading = false): Promise<boolean> => {
@@ -181,28 +182,35 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
   };
 
   const handleToggleVisibility = async () => {
-    if (!job || isUpdatingVisibility) return;
-    const newPublicState = !job.is_public;
+    if (!job) return;
+    const nextState = !job.is_public;
+    const currentRequestId = ++visibilityRequestIdRef.current;
     setIsUpdatingVisibility(true);
     setVisibilityError(null);
 
-    // Optimistic local state update
-    setJob((prev) => (prev ? { ...prev, is_public: newPublicState } : prev));
+    // Instant optimistic update (0ms UI latency)
+    setJob((prev) => (prev ? { ...prev, is_public: nextState } : prev));
+
     try {
-      const updated = await api.updateVisibility(job.id, newPublicState);
-      // Merge only the confirmed is_public status to prevent clobbering active polling results
-      setJob((prev) =>
-        prev ? { ...prev, is_public: updated.is_public } : prev,
-      );
+      const updated = await api.updateVisibility(job.id, nextState);
+      if (visibilityRequestIdRef.current === currentRequestId) {
+        setJob((prev) =>
+          prev ? { ...prev, is_public: updated.is_public } : prev,
+        );
+      }
     } catch (err) {
       console.error("Failed to toggle visibility", err);
-      setVisibilityError(
-        err instanceof Error ? err.message : "Failed to update visibility.",
-      );
-      // Rollback on failure
-      setJob((prev) => (prev ? { ...prev, is_public: !newPublicState } : prev));
+      if (visibilityRequestIdRef.current === currentRequestId) {
+        // Rollback on failure
+        setJob((prev) => (prev ? { ...prev, is_public: !nextState } : prev));
+        setVisibilityError(
+          err instanceof Error ? err.message : "Failed to update visibility.",
+        );
+      }
     } finally {
-      setIsUpdatingVisibility(false);
+      if (visibilityRequestIdRef.current === currentRequestId) {
+        setIsUpdatingVisibility(false);
+      }
     }
   };
 
@@ -332,14 +340,15 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
               {isOwner ? (
                 <div className="flex items-center gap-2">
                   <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
                     onClick={handleCopyLink}
+                    className="bg-white hover:bg-zinc-100 text-zinc-950 font-medium shadow-sm border border-white/20"
                     leftIcon={
                       copiedLink ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
                       ) : (
-                        <Share2 className="w-3.5 h-3.5" />
+                        <Share2 className="w-3.5 h-3.5 text-zinc-900" />
                       )
                     }
                   >
@@ -347,15 +356,25 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                   </Button>
 
                   {/* Public Toggle */}
-                  <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/[0.08] text-xs select-none">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={handleToggleVisibility}
+                    onKeyDown={(e) => {
+                      if (e.key === " " || e.key === "Enter") {
+                        e.preventDefault();
+                        handleToggleVisibility();
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800/80 border border-white/[0.08] hover:border-white/[0.15] text-xs select-none cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-zinc-400"
+                  >
                     <span className="text-xs font-medium text-zinc-300">Public</span>
-                    <button
-                      type="button"
+                    <span
                       role="switch"
                       aria-checked={job.is_public}
+                      aria-busy={isUpdatingVisibility}
                       aria-label="Toggle public link sharing"
-                      onClick={handleToggleVisibility}
-                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 ${
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
                         job.is_public ? "bg-emerald-500" : "bg-zinc-700"
                       }`}
                     >
@@ -364,7 +383,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                           job.is_public ? "translate-x-4" : "translate-x-0"
                         }`}
                       />
-                    </button>
+                    </span>
                   </div>
                 </div>
               ) : (
