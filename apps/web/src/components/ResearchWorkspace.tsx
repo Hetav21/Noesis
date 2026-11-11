@@ -170,14 +170,17 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
       setJob((prev) =>
         prev ? { ...prev, is_public: updated.is_public } : prev,
       );
-      if (newPublicState && typeof window !== "undefined") {
-        try {
-          await navigator.clipboard.writeText(window.location.href);
-          setCopiedLink(true);
-          setTimeout(() => setCopiedLink(false), 2000);
-        } catch {
-          // ignore clipboard errors
-        }
+      if (newPublicState && typeof window !== "undefined" && navigator?.clipboard?.writeText) {
+        // Fire clipboard copy as a non-blocking background task so it never stalls or prevents toggle reset
+        navigator.clipboard
+          .writeText(window.location.href)
+          .then(() => {
+            setCopiedLink(true);
+            setTimeout(() => setCopiedLink(false), 2000);
+          })
+          .catch(() => {
+            // Ignore clipboard errors
+          });
       }
     } catch (err) {
       console.error("Failed to toggle visibility", err);
@@ -341,9 +344,8 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                       role="switch"
                       aria-checked={job.is_public}
                       aria-label="Toggle public link sharing"
-                      disabled={isUpdatingVisibility}
                       onClick={handleToggleVisibility}
-                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 ${
                         job.is_public ? "bg-emerald-500" : "bg-zinc-700"
                       }`}
                     >
