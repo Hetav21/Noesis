@@ -312,51 +312,51 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
             <span>All Research</span>
           </Link>
 
-          <div className="flex items-center gap-2">
-            {isOwner ? (
-              <div className="flex items-center gap-2">
-                {/* Direct Share Toggle */}
-                <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/[0.08] text-xs select-none">
-                  <span className="text-xs font-medium text-zinc-300">Share</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={job.is_public}
-                    aria-label="Toggle public link sharing"
-                    disabled={isUpdatingVisibility}
-                    onClick={handleToggleVisibility}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      job.is_public ? "bg-emerald-500" : "bg-zinc-700"
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                        job.is_public ? "translate-x-4" : "translate-x-0"
+          {isCompleted && (
+            <div className="flex items-center gap-2">
+              {isOwner ? (
+                <div className="flex items-center gap-2">
+                  {/* Direct Share Toggle */}
+                  <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/[0.08] text-xs select-none">
+                    <span className="text-xs font-medium text-zinc-300">Share</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={job.is_public}
+                      aria-label="Toggle public link sharing"
+                      disabled={isUpdatingVisibility}
+                      onClick={handleToggleVisibility}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        job.is_public ? "bg-emerald-500" : "bg-zinc-700"
                       }`}
-                    />
-                  </button>
-                </div>
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                          job.is_public ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
 
-                {job.is_public && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopyLink}
-                    leftIcon={
-                      copiedLink ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )
-                    }
-                  >
-                    {copiedLink ? "Copied" : "Copy link"}
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <>
-                {(job.status === "completed" || job.status === "failed") && (
+                  {job.is_public && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyLink}
+                      leftIcon={
+                        copiedLink ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )
+                      }
+                    >
+                      {copiedLink ? "Copied" : "Copy link"}
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <>
                   <Button
                     variant="default"
                     size="sm"
@@ -367,24 +367,24 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                   >
                     Import to my sessions
                   </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyLink}
-                  leftIcon={
-                    copiedLink ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <Share2 className="w-3.5 h-3.5" />
-                    )
-                  }
-                >
-                  {copiedLink ? "Copied" : "Share"}
-                </Button>
-              </>
-            )}
-          </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyLink}
+                    leftIcon={
+                      copiedLink ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Share2 className="w-3.5 h-3.5" />
+                      )
+                    }
+                  >
+                    {copiedLink ? "Copied" : "Share"}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Visibility Error Notice */}
