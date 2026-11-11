@@ -291,6 +291,20 @@ export function normalizeReportMarkdown(text: string): {
       continue;
     }
 
+    // Text with parenthesized or bracketed URL: 1. Title (https://...) or 1. Title <https://...>
+    const parenUrl = line.match(
+      /^(?:[-*•\d\.\)]+\s*)(.*?)\s*[<(](https?:\/\/(?:[^\s()<>]|\([^\s()]*\))+)[>)]/,
+    );
+    if (parenUrl) {
+      sources.push({
+        index,
+        title: parenUrl[1].trim() || `Source ${index}`,
+        url: parenUrl[2].trim(),
+        domain: extractDomain(parenUrl[2].trim()),
+      });
+      continue;
+    }
+
     // Bare URL
     const bareUrl = line.match(/(https?:\/\/(?:[^\s()]|\([^\s()]*\))+)/);
     if (bareUrl) {
