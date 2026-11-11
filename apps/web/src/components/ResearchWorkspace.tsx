@@ -316,6 +316,23 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
             <div className="flex items-center gap-2">
               {isOwner ? (
                 <div className="flex items-center gap-2">
+                  {job.is_public && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyLink}
+                      leftIcon={
+                        copiedLink ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )
+                      }
+                    >
+                      {copiedLink ? "Copied" : "Copy link"}
+                    </Button>
+                  )}
+
                   {/* Direct Share Toggle */}
                   <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/[0.08] text-xs select-none">
                     <span className="text-xs font-medium text-zinc-300">Share</span>
@@ -337,23 +354,6 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                       />
                     </button>
                   </div>
-
-                  {job.is_public && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCopyLink}
-                      leftIcon={
-                        copiedLink ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )
-                      }
-                    >
-                      {copiedLink ? "Copied" : "Copy link"}
-                    </Button>
-                  )}
                 </div>
               ) : (
                 <>
