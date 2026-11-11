@@ -167,7 +167,7 @@ export const RecentSessions: React.FC = () => {
                         variant="outline"
                         className="text-[10px] text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
                       >
-                        <Globe className="w-2.5 h-2.5 mr-1 text-emerald-400" />
+                        <Globe className="w-2.5 h-2.5 shrink-0 text-emerald-400" />
                         Public
                       </Badge>
                     )}
