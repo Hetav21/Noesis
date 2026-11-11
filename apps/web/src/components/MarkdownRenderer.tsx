@@ -45,8 +45,8 @@ const Heading: React.FC<HeadingProps> = ({
         <span
           key={slug}
           id={slug}
-          tabIndex={-1}
-          className="scroll-mt-24 pointer-events-none focus:outline-none"
+          data-heading-id={id}
+          className="scroll-mt-24 pointer-events-none"
           aria-hidden="true"
         />
       ))}

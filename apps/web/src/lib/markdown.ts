@@ -85,17 +85,28 @@ export function extractAstText(node: any): string {
  */
 export function remarkHeadingSlugs() {
   return (tree: any) => {
-    const slugCounts = new Map<string, number>();
+    const allocatedIds = new Set<string>();
     function visit(node: any) {
       if (node.type === "heading") {
         const text = extractAstText(node);
         const rawSlugs = getHeadingSlugs(text);
         const baseSlug = rawSlugs[0] || "section";
-        const count = slugCounts.get(baseSlug) || 0;
-        slugCounts.set(baseSlug, count + 1);
-        const primaryId = count === 0 ? baseSlug : `${baseSlug}-${count}`;
-        const secondarySlugs =
-          count === 0 ? rawSlugs.filter((s) => s !== primaryId) : [];
+
+        let primaryId = baseSlug;
+        let suffix = 0;
+        while (allocatedIds.has(primaryId)) {
+          suffix += 1;
+          primaryId = `${baseSlug}-${suffix}`;
+        }
+        allocatedIds.add(primaryId);
+
+        const secondarySlugs: string[] = [];
+        for (const slug of rawSlugs.slice(1)) {
+          if (slug && slug !== primaryId && !allocatedIds.has(slug)) {
+            secondarySlugs.push(slug);
+            allocatedIds.add(slug);
+          }
+        }
 
         node.data = node.data || {};
         node.data.hProperties = node.data.hProperties || {};
@@ -158,10 +169,13 @@ export function scrollToHashTarget(
         window.history.pushState(null, "", `#${targetId}`);
       }
       if (focusTarget) {
-        if (!targetEl.hasAttribute("tabindex")) {
-          targetEl.setAttribute("tabindex", "-1");
+        const headingId = targetEl.getAttribute("data-heading-id");
+        const focusEl =
+          (headingId ? document.getElementById(headingId) : null) || targetEl;
+        if (!focusEl.hasAttribute("tabindex")) {
+          focusEl.setAttribute("tabindex", "-1");
         }
-        targetEl.focus({ preventScroll: true });
+        focusEl.focus({ preventScroll: true });
       }
       return true;
     }
