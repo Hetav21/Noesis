@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import React, { useState, useMemo, useRef } from "react";
+import { MarkdownRenderer } from "./MarkdownRenderer";
+import { useHashNavigation } from "@/lib/markdown";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import {
@@ -46,6 +46,11 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
     const readTime = Math.max(1, Math.ceil(words / 220));
     return { words, readTime };
   }, [result]);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Automatically scroll to target anchor once report content is ready
+  useHashNavigation(Boolean(result));
 
   const handleCopy = async () => {
     if (!result) return;
@@ -181,14 +186,11 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
         )}
 
         <div
+          ref={containerRef}
           className={`p-6 sm:p-8 bg-[#0e0e11] ${fullHeight ? "" : "flex-1 overflow-y-auto"}`}
         >
           {result ? (
-            <div className="markdown-body max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {result}
-              </ReactMarkdown>
-            </div>
+            <MarkdownRenderer content={result} />
           ) : (
             <div className="h-full min-h-[300px] flex flex-col items-center justify-center text-center p-6 space-y-3">
               <div className="space-y-1 max-w-sm">
