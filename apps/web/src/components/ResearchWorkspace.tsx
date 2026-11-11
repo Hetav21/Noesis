@@ -143,16 +143,40 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
     };
   }, [fetchJob, retryTrigger]);
 
-  const handleCopyLink = async () => {
-    setCopyError(null);
+  const tryFallbackCopy = () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      const textArea = document.createElement("textarea");
+      textArea.value = window.location.href;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+    } catch {
+      // ignore clipboard fallback errors
+    }
+  };
+
+  const handleCopyLink = () => {
+    setCopyError(null);
+    if (typeof window !== "undefined") {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy link", err);
-      setCopyError("Failed to copy link to clipboard.");
-      setTimeout(() => setCopyError(null), 3000);
+
+      try {
+        if (navigator?.clipboard?.writeText) {
+          navigator.clipboard.writeText(window.location.href).catch(() => {
+            tryFallbackCopy();
+          });
+        } else {
+          tryFallbackCopy();
+        }
+      } catch {
+        tryFallbackCopy();
+      }
     }
   };
 
@@ -170,18 +194,6 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
       setJob((prev) =>
         prev ? { ...prev, is_public: updated.is_public } : prev,
       );
-      if (newPublicState && typeof window !== "undefined" && navigator?.clipboard?.writeText) {
-        // Fire clipboard copy as a non-blocking background task so it never stalls or prevents toggle reset
-        navigator.clipboard
-          .writeText(window.location.href)
-          .then(() => {
-            setCopiedLink(true);
-            setTimeout(() => setCopiedLink(false), 2000);
-          })
-          .catch(() => {
-            // Ignore clipboard errors
-          });
-      }
     } catch (err) {
       console.error("Failed to toggle visibility", err);
       setVisibilityError(
@@ -319,26 +331,24 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
             <div className="flex items-center gap-2">
               {isOwner ? (
                 <div className="flex items-center gap-2">
-                  {job.is_public && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCopyLink}
-                      leftIcon={
-                        copiedLink ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )
-                      }
-                    >
-                      {copiedLink ? "Copied" : "Copy link"}
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyLink}
+                    leftIcon={
+                      copiedLink ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Share2 className="w-3.5 h-3.5" />
+                      )
+                    }
+                  >
+                    {copiedLink ? "Copied" : "Share"}
+                  </Button>
 
-                  {/* Direct Share Toggle */}
+                  {/* Public Toggle */}
                   <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/[0.08] text-xs select-none">
-                    <span className="text-xs font-medium text-zinc-300">Share</span>
+                    <span className="text-xs font-medium text-zinc-300">Public</span>
                     <button
                       type="button"
                       role="switch"
