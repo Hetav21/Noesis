@@ -14,17 +14,17 @@ export function escapeMarkdownTitle(title: string): string {
   return title.replace(/\\/g, "\\\\").replace(/[[\]]/g, "\\$&");
 }
 
-
 /**
  * Generates a clean URL slug from heading text compatible with standard GFM anchors.
- * Preserves Unicode letters and numbers while removing punctuation, without collapsing repeated hyphens.
+ * Preserves Unicode letters and numbers while removing punctuation (including connector punctuation like underscores),
+ * without collapsing repeated hyphens.
  */
 export function slugify(text: string): string {
   return text
     .toString()
     .trim()
     .toLowerCase()
-    .replace(/[^\p{L}\p{M}\p{N}\p{Pc}\s-]/gu, "")
+    .replace(/[^\p{L}\p{M}\p{N}\s-]/gu, "")
     .replace(/\s/g, "-")
     .replace(/^-+/, "")
     .replace(/-+$/, "");
@@ -68,6 +68,52 @@ export function getNodeText(node: React.ReactNode): string {
 }
 
 /**
+ * Extracts plain text from a unified/remark AST node.
+ */
+export function extractAstText(node: any): string {
+  if (!node) return "";
+  if (typeof node.value === "string") return node.value;
+  if (Array.isArray(node.children)) {
+    return node.children.map(extractAstText).join("");
+  }
+  return "";
+}
+
+/**
+ * Remark plugin to compute stable, occurrence-based heading IDs directly from the markdown AST.
+ * This guarantees IDs are deterministic and never mutated by React component rerenders.
+ */
+export function remarkHeadingSlugs() {
+  return (tree: any) => {
+    const slugCounts = new Map<string, number>();
+    function visit(node: any) {
+      if (node.type === "heading") {
+        const text = extractAstText(node);
+        const rawSlugs = getHeadingSlugs(text);
+        const baseSlug = rawSlugs[0] || "section";
+        const count = slugCounts.get(baseSlug) || 0;
+        slugCounts.set(baseSlug, count + 1);
+        const primaryId = count === 0 ? baseSlug : `${baseSlug}-${count}`;
+        const secondarySlugs =
+          count === 0 ? rawSlugs.filter((s) => s !== primaryId) : [];
+
+        node.data = node.data || {};
+        node.data.hProperties = node.data.hProperties || {};
+        node.data.hProperties.id = primaryId;
+        if (secondarySlugs.length > 0) {
+          node.data.hProperties["data-secondary-slugs"] =
+            secondarySlugs.join(",");
+        }
+      }
+      if (Array.isArray(node.children)) {
+        node.children.forEach(visit);
+      }
+    }
+    visit(tree);
+  };
+}
+
+/**
  * Extracts a hostname/domain for display from a URL string.
  */
 export function extractDomain(url: string): string {
@@ -82,9 +128,19 @@ export function extractDomain(url: string): string {
 /**
  * Smoothly scrolls to an element by its ID or hash, respecting prefers-reduced-motion
  * and safely handling malformed URI components.
+ * For user-initiated navigation (options.focusTarget = true), moves keyboard focus to the target
+ * element to keep navigation accessible.
  */
-export function scrollToHashTarget(hashOrId: string, pushState = false): boolean {
+export function scrollToHashTarget(
+  hashOrId: string,
+  options?: { pushState?: boolean; focusTarget?: boolean } | boolean,
+): boolean {
   if (typeof window === "undefined" || !hashOrId) return false;
+  const pushState =
+    typeof options === "boolean" ? options : Boolean(options?.pushState);
+  const focusTarget =
+    typeof options === "object" ? Boolean(options?.focusTarget) : false;
+
   try {
     const rawId = hashOrId.startsWith("#") ? hashOrId.slice(1) : hashOrId;
     const targetId = decodeURIComponent(rawId);
@@ -101,6 +157,12 @@ export function scrollToHashTarget(hashOrId: string, pushState = false): boolean
       if (pushState) {
         window.history.pushState(null, "", `#${targetId}`);
       }
+      if (focusTarget) {
+        if (!targetEl.hasAttribute("tabindex")) {
+          targetEl.setAttribute("tabindex", "-1");
+        }
+        targetEl.focus({ preventScroll: true });
+      }
       return true;
     }
   } catch {
@@ -112,6 +174,7 @@ export function scrollToHashTarget(hashOrId: string, pushState = false): boolean
 /**
  * React hook to automatically scroll to the URL hash once content is ready,
  * and listen for subsequent hashchange events without artificial fixed delays.
+ * Page-load scrolling keeps focus unchanged.
  */
 export function useHashNavigation(isReady: boolean): void {
   useEffect(() => {
@@ -119,14 +182,25 @@ export function useHashNavigation(isReady: boolean): void {
 
     const onHashChange = () => {
       if (window.location.hash) {
-        scrollToHashTarget(window.location.hash);
+        scrollToHashTarget(window.location.hash, {
+          pushState: false,
+          focusTarget: false,
+        });
       }
     };
 
     if (window.location.hash) {
-      if (!scrollToHashTarget(window.location.hash)) {
+      if (
+        !scrollToHashTarget(window.location.hash, {
+          pushState: false,
+          focusTarget: false,
+        })
+      ) {
         requestAnimationFrame(() => {
-          scrollToHashTarget(window.location.hash);
+          scrollToHashTarget(window.location.hash, {
+            pushState: false,
+            focusTarget: false,
+          });
         });
       }
     }
