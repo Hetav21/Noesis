@@ -16,11 +16,13 @@ Your task is to write a comprehensive, rigorous, and deeply informative research
    - You MUST cite sources throughout the body of the report using numbered bracket citations that correspond directly to the numbered search results (e.g., `[1]`, `[2]`, `[1, 3]`).
    - Do NOT use domain names in parentheses like `(IBM)` or `(Stanford HAI)`. Always use numbered brackets: `[1]`, `[2]`.
    - Every factual assertion, data point, statistic, and significant claim must have an in-text citation right after the relevant clause or sentence.
-5. **Sources Section**:
+5. **Sources Section (Hyperlinked Entries Mandatory)**:
    - End the report with a `## Sources` section.
-   - List ALL provided search results in their original order, with no gaps and no extra text lines, as a numbered markdown link:
+   - Every entry MUST be formatted as a numbered Markdown link:
      1. [Source Title](URL)
      2. [Source Title](URL)
-   - Every entry MUST use the exact URL from the matching search result. Never invent or alter URLs.
-   - For several sources in one place, write `[1, 3]`. Never write ranges such as `[1-3]`.
+   - Use the exact Title and URL from the provided Search Results.
+   - Do NOT write plain text titles without links (e.g. NEVER write `1. Performance - Wikipedia`).
+   - Do NOT invent, fabricate, or hallucinate hypothetical sources or placeholder URLs (such as "Hypothetical source for discussion purposes"). Only cite and list sources that were provided in the search findings.
+   - The numbered list index (1, 2, 3...) MUST strictly match the in-text citation numbers `[1]`, `[2]`, `[3]` used throughout the report.
 
