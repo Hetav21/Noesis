@@ -222,3 +222,16 @@
   border-color: rgba(255, 255, 255, 0.08);
   margin: 2rem 0;
 }
+
+:target {
+  scroll-margin-top: 6rem;
+}
+
+@media print {
+  .markdown-body,
+  .markdown-body * {
+    color: #000 !important;
+    background: transparent !important;
+  }
+}
+
