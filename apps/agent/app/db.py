@@ -103,6 +103,14 @@ async def init_db() -> None:
                 "CREATE INDEX IF NOT EXISTS ix_researchjob_client_ip ON researchjob (client_ip);"
             )
         )
+        await conn.execute(
+            text("ALTER TABLE researchjob ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;")
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_researchjob_is_public ON researchjob (is_public);"
+            )
+        )
 
 
 async def check_db_health() -> bool:

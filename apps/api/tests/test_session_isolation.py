@@ -1,6 +1,6 @@
 import os
 import uuid
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -98,52 +98,162 @@ async def test_session_cookie_automatic_issuance():
 
 @pytest.mark.asyncio
 async def test_session_history_isolation_and_shareable_links():
-    """Verify research history scoping, shareable link viewing, and deletion protections."""
+    """Verify research history scoping, public sharing toggle, 404 private protection, and forking."""
     transport = ASGITransport(app=app)
-    with patch("app.main.run_research_task"):
-        # User A creates a research session
+    with patch("app.main.run_research_task", new_callable=AsyncMock):
+        # User A creates a research session (private by default)
+        job_a_id = None
+        forked_b_id = None
+        cookies_a = None
+        cookies_b = None
+
         async with AsyncClient(transport=transport, base_url="http://test") as client_a:
+            cookies_a = client_a.cookies
             create_a = await client_a.post(
                 "/api/research",
                 json={"query": "User A Private Study", "depth": 1, "breadth": 2},
             )
+            if create_a.status_code == 200:
+                job_a = create_a.json()
+                job_a_id = job_a.get("id")
+
+        try:
             assert create_a.status_code == 200
-            job_a = create_a.json()
-            job_a_id = job_a["id"]
             assert job_a["is_owner"] is True
+            assert job_a["is_public"] is False
 
             # User A lists research -> sees their own job
-            list_a = await client_a.get("/api/research")
-            assert list_a.status_code == 200
-            assert any(j["id"] == job_a_id for j in list_a.json())
+            async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies_a) as client_a:
+                list_a = await client_a.get("/api/research")
+                assert list_a.status_code == 200
+                assert any(j["id"] == job_a_id for j in list_a.json())
 
-        # User B (separate client instance, distinct cookies and session)
-        async with AsyncClient(transport=transport, base_url="http://test") as client_b:
-            # User B lists research -> User A's job MUST NOT appear in User B's history
-            list_b = await client_b.get("/api/research")
-            assert list_b.status_code == 200
-            assert not any(j["id"] == job_a_id for j in list_b.json())
+            # User B (separate client instance, distinct cookies and session)
+            async with AsyncClient(transport=transport, base_url="http://test") as client_b:
+                cookies_b = client_b.cookies
+                # User B lists research -> User A's job MUST NOT appear in User B's history
+                list_b = await client_b.get("/api/research")
+                assert list_b.status_code == 200
+                assert not any(j["id"] == job_a_id for j in list_b.json())
 
-            # User B visits User A's shareable report URL -> can view it, but is_owner is False
-            get_shared = await client_b.get(f"/api/research/{job_a_id}")
-            assert get_shared.status_code == 200
-            shared_data = get_shared.json()
-            assert shared_data["id"] == job_a_id
-            assert shared_data["query"] == "User A Private Study"
-            assert shared_data["is_owner"] is False
+                # User B visits User A's private report URL -> 404 Not Found (private protection)
+                get_private = await client_b.get(f"/api/research/{job_a_id}")
+                assert get_private.status_code == 404
 
-            # User B attempts to DELETE User A's research -> strictly rejected with 403 Forbidden
-            delete_attempt = await client_b.delete(f"/api/research/{job_a_id}")
-            assert delete_attempt.status_code == 403
-            assert "Forbidden" in delete_attempt.json()["detail"]
+                # User B attempts to toggle visibility on User A's job -> 403 Forbidden
+                toggle_b = await client_b.patch(
+                    f"/api/research/{job_a_id}/visibility",
+                    json={"is_public": True},
+                )
+                assert toggle_b.status_code == 403
 
-        # User A returns and deletes their own research -> succeeds
-        async with AsyncClient(
-            transport=transport, base_url="http://test", cookies=client_a.cookies
-        ) as client_a_return:
-            del_res = await client_a_return.delete(f"/api/research/{job_a_id}")
-            assert del_res.status_code == 200
-            assert del_res.json()["status"] == "deleted"
+            # User A makes the report public
+            async with AsyncClient(
+                transport=transport, base_url="http://test", cookies=cookies_a
+            ) as client_a_return:
+                toggle_a = await client_a_return.patch(
+                    f"/api/research/{job_a_id}/visibility",
+                    json={"is_public": True},
+                )
+                assert toggle_a.status_code == 200
+                assert toggle_a.json()["is_public"] is True
+
+            # Now User B visits User A's shared report -> succeeds with 200 OK
+            async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies_b) as client_b_view:
+                get_shared = await client_b_view.get(f"/api/research/{job_a_id}")
+                assert get_shared.status_code == 200
+                shared_data = get_shared.json()
+                assert shared_data["id"] == job_a_id
+                assert shared_data["is_owner"] is False
+                assert shared_data["is_public"] is True
+
+                # Attempt fork while still queued -> rejected with 409 Conflict
+                fork_active = await client_b_view.post(f"/api/research/{job_a_id}/fork")
+                assert fork_active.status_code == 409
+                assert "cannot be imported yet" in fork_active.json()["detail"]
+
+            # Mark source job as running in DB
+            async with async_session() as db:
+                job_in_db = await db.get(ResearchJob, job_a_id)
+                assert job_in_db is not None
+                job_in_db.status = JobStatus.RUNNING
+                await db.commit()
+
+            # Attempt fork while running -> also rejected with 409 Conflict
+            async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies_b) as client_b_view:
+                fork_running = await client_b_view.post(f"/api/research/{job_a_id}/fork")
+                assert fork_running.status_code == 409
+                assert "cannot be imported yet" in fork_running.json()["detail"]
+
+            # Mark source job as completed in DB
+            async with async_session() as db:
+                job_in_db = await db.get(ResearchJob, job_a_id)
+                assert job_in_db is not None
+                job_in_db.status = JobStatus.COMPLETED
+                job_in_db.result = "Completed study results"
+                await db.commit()
+
+            # User B can now successfully fork the completed research
+            async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies_b) as client_b_view:
+                fork_res = await client_b_view.post(f"/api/research/{job_a_id}/fork")
+                if fork_res.status_code == 200:
+                    forked_data = fork_res.json()
+                    forked_b_id = forked_data.get("id")
+
+                assert fork_res.status_code == 200
+                assert forked_data["id"] != job_a_id
+                assert forked_data["query"] == "User A Private Study"
+                assert forked_data["is_owner"] is True
+                assert forked_data["is_public"] is False
+                assert forked_data["status"] == "completed"
+
+                # User B's history now contains the forked research
+                list_b_after = await client_b_view.get("/api/research")
+                assert list_b_after.status_code == 200
+                assert any(j["id"] == forked_b_id for j in list_b_after.json())
+
+                # User B attempts to DELETE User A's research -> strictly rejected with 403 Forbidden
+                delete_attempt = await client_b_view.delete(f"/api/research/{job_a_id}")
+                assert delete_attempt.status_code == 403
+
+            # User A revokes public sharing (turns it back to private)
+            async with AsyncClient(
+                transport=transport, base_url="http://test", cookies=cookies_a
+            ) as client_a_revoke:
+                revoke_a = await client_a_revoke.patch(
+                    f"/api/research/{job_a_id}/visibility",
+                    json={"is_public": False},
+                )
+                assert revoke_a.status_code == 200
+                assert revoke_a.json()["is_public"] is False
+
+            # User B can no longer view User A's original report -> 404 Not Found
+            async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies_b) as client_b_denied:
+                denied_res = await client_b_denied.get(f"/api/research/{job_a_id}")
+                assert denied_res.status_code == 404
+        finally:
+            # Teardown User B's forked job independently
+            if forked_b_id and cookies_b:
+                try:
+                    async with AsyncClient(
+                        transport=transport, base_url="http://test", cookies=cookies_b
+                    ) as client_b_cleanup:
+                        del_fork = await client_b_cleanup.delete(f"/api/research/{forked_b_id}")
+                        assert del_fork.status_code == 200
+                except Exception as e:
+                    print(f"Warning: Failed to cleanup forked_b_id {forked_b_id}: {e}")
+
+            # Teardown User A's research independently
+            if job_a_id and cookies_a:
+                try:
+                    async with AsyncClient(
+                        transport=transport, base_url="http://test", cookies=cookies_a
+                    ) as client_a_cleanup:
+                        del_res = await client_a_cleanup.delete(f"/api/research/{job_a_id}")
+                        assert del_res.status_code == 200
+                        assert del_res.json()["status"] == "deleted"
+                except Exception as e:
+                    print(f"Warning: Failed to cleanup job_a_id {job_a_id}: {e}")
 
 
 @pytest.mark.asyncio
@@ -195,7 +305,7 @@ async def test_unowned_report_deletion_rejected_and_claimable():
 async def test_concurrency_limit_enforcement():
     """Verify that concurrent jobs per session are capped at MAX_CONCURRENT_JOBS_PER_SESSION."""
     transport = ASGITransport(app=app)
-    with patch("app.main.run_research_task"):
+    with patch("app.main.run_research_task", new_callable=AsyncMock):
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             res1 = await client.post(
                 "/api/research",
@@ -221,7 +331,7 @@ async def test_hourly_rate_limit_durable_across_deletions(monkeypatch):
     monkeypatch.setenv("RATE_LIMIT_JOBS_PER_HOUR", "2")
     monkeypatch.setenv("MAX_CONCURRENT_JOBS_PER_SESSION", "0")
 
-    with patch("app.main.run_research_task"):
+    with patch("app.main.run_research_task", new_callable=AsyncMock):
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             # Job 1: create and immediately delete
             r1 = await client.post(
@@ -262,7 +372,7 @@ async def test_shared_ip_rate_limiting_with_testing_false(monkeypatch):
 
     headers_shared_ip = {"x-forwarded-for": "198.51.100.42"}
 
-    with patch("app.main.run_research_task"):
+    with patch("app.main.run_research_task", new_callable=AsyncMock):
         # Session A creates 1 job from shared IP (within session limit of 2)
         async with AsyncClient(transport=transport, base_url="http://test", headers=headers_shared_ip) as client_a:
             r_a1 = await client_a.post(
