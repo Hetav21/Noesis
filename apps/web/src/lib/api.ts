@@ -77,7 +77,28 @@ export interface ResearchJob {
   result: string | null;
   created_at: string;
   is_owner?: boolean;
+  is_public?: boolean;
 }
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+export const isNotFoundError = (err: unknown): boolean => {
+  if (err instanceof ApiError) {
+    return err.status === 404;
+  }
+  if (err && typeof err === "object" && "status" in err) {
+    return (err as { status?: number }).status === 404;
+  }
+  return false;
+};
 
 export const api = {
   createResearch: async (config: ResearchConfig): Promise<ResearchJob> => {
@@ -101,7 +122,48 @@ export const api = {
       credentials: "include",
     });
     if (!res.ok) {
-      throw new Error("Research job not found");
+      if (res.status === 404) {
+        throw new ApiError(
+          "This research session does not exist or is set to private by its author.",
+          404,
+        );
+      }
+      const err = await res.json().catch(() => ({}));
+      throw new ApiError(
+        err.detail || `Failed to fetch research session (${res.status})`,
+        res.status,
+      );
+    }
+    return res.json();
+  },
+
+  updateVisibility: async (
+    jobId: string,
+    isPublic: boolean,
+  ): Promise<ResearchJob> => {
+    await ensureSession();
+    const res = await fetch(`${getBaseUrl()}/research/${jobId}/visibility`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ is_public: isPublic }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to update research visibility");
+    }
+    return res.json();
+  },
+
+  forkResearch: async (jobId: string): Promise<ResearchJob> => {
+    await ensureSession();
+    const res = await fetch(`${getBaseUrl()}/research/${jobId}/fork`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to import research session");
     }
     return res.json();
   },

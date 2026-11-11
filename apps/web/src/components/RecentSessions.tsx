@@ -6,7 +6,7 @@ import { api, type ResearchJob } from "@/lib/api";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
-import { ArrowUpRight, Trash2, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Trash2, RefreshCw, Globe } from "lucide-react";
 
 export const RecentSessions: React.FC = () => {
   const [jobs, setJobs] = useState<ResearchJob[]>([]);
@@ -162,6 +162,15 @@ export const RecentSessions: React.FC = () => {
                 <div className="space-y-1 flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     {getStatusBadge(job.status)}
+                    {job.is_public && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                      >
+                        <Globe className="w-2.5 h-2.5 mr-1 text-emerald-400" />
+                        Public
+                      </Badge>
+                    )}
                     <span className="text-[11px] text-zinc-500 font-mono">
                       {formatDate(job.created_at)}
                     </span>
