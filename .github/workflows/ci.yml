@@ -187,8 +187,54 @@ jobs:
     steps:
       - name: Evaluate status
         run: |
-          if [ "${{ needs.detect-changes.result }}" != "success" ] || [ "${{ needs.api.result }}" = "failure" ] || [ "${{ needs.agent.result }}" = "failure" ] || [ "${{ needs.web.result }}" = "failure" ]; then
+          if [ "${{ needs.detect-changes.result }}" != "success" ] || \
+             [ "${{ needs.api.result }}" = "failure" ] || [ "${{ needs.api.result }}" = "cancelled" ] || \
+             [ "${{ needs.agent.result }}" = "failure" ] || [ "${{ needs.agent.result }}" = "cancelled" ] || \
+             [ "${{ needs.web.result }}" = "failure" ] || [ "${{ needs.web.result }}" = "cancelled" ]; then
             echo "CI checks failed."
             exit 1
           fi
           echo "CI checks succeeded or cleanly skipped."
+
+  deploy-agent:
+    name: Deploy Agent to Render
+    needs: [detect-changes, agent, ci]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.agent == 'true' && needs.agent.result == 'success' && needs.ci.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    concurrency:
+      group: deploy-render-agent
+      cancel-in-progress: false
+    steps:
+      - name: Trigger Render Deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          if [ -z "$RENDER_API_KEY" ] || [ -z "$RENDER_SERVICE_ID" ]; then
+            echo "::warning::Render credentials (RENDER_API_KEY or RENDER_SERVICE_ID) not configured, skipping automated deployment."
+            exit 0
+          fi
+          echo "Triggering Render deployment for commit ${{ github.sha }}..."
+          status=$(curl -sS \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 3 \
+            --retry-delay 2 \
+            --retry-connrefused \
+            -o /tmp/render_deploy.json \
+            -w "%{http_code}" \
+            -X POST \
+            "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d "{\"clearCache\": \"do_not_clear\", \"commitId\": \"${{ github.sha }}\"}")
+
+          if [ "$status" -ge 200 ] 2>/dev/null && [ "$status" -lt 300 ] 2>/dev/null; then
+            echo "Successfully initiated Render deployment: $(cat /tmp/render_deploy.json)"
+          else
+            echo "::error::Render deployment trigger failed with HTTP $status: $(cat /tmp/render_deploy.json 2>/dev/null || echo 'No response body')"
+            exit 1
+          fi
