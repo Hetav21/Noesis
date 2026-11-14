@@ -1,5 +1,4 @@
 import asyncio
-import re
 import time
 from collections.abc import Callable
 from typing import Any
@@ -125,6 +124,7 @@ class ResearchWorkflow:
         #    bot/rate-limit error (e.g. from cloud datacenter IP ranges).
         backends_to_try: list[str | None] = [None, "yahoo"]
         results: list[dict[str, Any]] = []
+        last_err: Exception | None = None
 
         for backend in backends_to_try:
             for attempt in range(2):
@@ -139,11 +139,15 @@ class ResearchWorkflow:
                     if res:
                         results = list(res)
                         break
-                except Exception:
+                except Exception as e:  # noqa: BLE001
+                    last_err = e
                     time.sleep(0.5 * (attempt + 1))
                     continue
             if results:
                 break
+
+        if not results and last_err:
+            raise last_err
 
         filtered_results = []
         for r in results:
