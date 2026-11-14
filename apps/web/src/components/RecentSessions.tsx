@@ -175,7 +175,7 @@ export const RecentSessions: React.FC = () => {
                       {formatDate(job.created_at)}
                     </span>
                     <span className="text-[11px] text-zinc-500">
-                      • {job.depth} {job.depth === 1 ? "round" : "rounds"}
+                      • Depth {job.depth}
                     </span>
                   </div>
                   <Link

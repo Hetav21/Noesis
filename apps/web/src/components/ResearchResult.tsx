@@ -169,7 +169,7 @@ export const ResearchResult: React.FC<ResearchResultProps> = ({
         {result && onViewActivity && (
           <div className="px-6 py-2.5 bg-zinc-900/60 border-b border-white/[0.04] flex items-center justify-between text-xs text-zinc-400">
             <span className="font-mono text-[11px] text-zinc-400">
-              Researched across {depth} {depth === 1 ? "round" : "rounds"} •{" "}
+              Researched at Depth {depth} •{" "}
               {sourcesCount > 0
                 ? `${sourcesCount} events recorded`
                 : "Multiple web sources"}

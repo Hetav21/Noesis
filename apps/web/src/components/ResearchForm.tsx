@@ -155,10 +155,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                       : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  Quick{" "}
-                  <span className="text-[10px] text-zinc-500 hidden sm:inline ml-1">
-                    1 round
-                  </span>
+                  Quick
                 </button>
                 <button
                   type="button"
@@ -170,10 +167,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                       : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  Standard{" "}
-                  <span className="text-[10px] text-zinc-500 hidden sm:inline ml-1">
-                    2 rounds
-                  </span>
+                  Standard
                 </button>
                 <button
                   type="button"
@@ -185,10 +179,7 @@ export const ResearchForm: React.FC<ResearchFormProps> = ({
                       : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  Deep{" "}
-                  <span className="text-[10px] text-zinc-500 hidden sm:inline ml-1">
-                    3 rounds
-                  </span>
+                  Deep
                 </button>
               </div>
 

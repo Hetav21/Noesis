@@ -1,13 +1,10 @@
-from pathlib import Path
-
 from agents import Agent
 from pydantic import BaseModel
 
 from app.config import get_agent_settings
+from app.services.prompt_loader import load_system_prompt
 
-PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "follow_up.md"
-with open(PROMPT_PATH, "r", encoding="utf-8") as f:
-    FOLLOW_UP_DECISION_PROMPT = f.read()
+FOLLOW_UP_DECISION_PROMPT = load_system_prompt("follow_up.md")
 
 
 class FollowUpDecisionResponse(BaseModel):

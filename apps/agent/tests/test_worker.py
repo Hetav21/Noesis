@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from sqlmodel import text
 
 from app.db import async_session, init_db

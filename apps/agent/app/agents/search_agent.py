@@ -36,11 +36,9 @@ def url_scrape(url: str) -> str:
         return f"Failed to scrape content from {url}: {e!s}"
 
 
-from pathlib import Path
+from app.services.prompt_loader import load_system_prompt
 
-PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "search.md"
-with open(PROMPT_PATH, "r", encoding="utf-8") as f:
-    SEARCH_AGENT_PROMPT = f.read()
+SEARCH_AGENT_PROMPT = load_system_prompt("search.md")
 
 
 model, settings = get_agent_settings("SEARCH_AGENT", "gpt-4o-mini")

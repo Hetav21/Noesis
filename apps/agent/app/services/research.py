@@ -1,5 +1,6 @@
 import asyncio
 import time
+import urllib.parse
 from collections.abc import Callable
 from typing import Any
 
@@ -15,12 +16,15 @@ from app.agents.follow_up_agent import (
 from app.agents.query_agent import QueryResponse, query_agent
 from app.agents.search_agent import search_agent
 from app.agents.synthesis_agent import synthesis_agent
+from app.services.prompt_loader import render_user_prompt
 
 
 class SearchResult(BaseModel):
     title: str
     url: str
     summary: str
+    iteration: int = 1
+    query: str = ""
 
 
 class ResearchWorkflow:
@@ -33,11 +37,13 @@ class ResearchWorkflow:
     ):
         self.query = query
         self.log_callback = log_callback
+        self.depth = max(1, min(5, depth))
+        self.breadth = max(2, min(10, breadth))
         self.search_results = []
         self.iteration = 1
         # Validate and clamp config values
-        self.max_iterations = max(1, min(5, depth)) + 1  # depth 1-5 -> iterations 2-6
-        self.max_results_per_query = max(2, min(10, breadth))  # breadth 2-10
+        self.max_iterations = self.depth + 1  # depth 1-5 -> iterations 2-6
+        self.max_results_per_query = self.breadth  # breadth 2-10
 
     async def _log(self, entry: dict):
         if self.log_callback:
@@ -70,7 +76,7 @@ class ResearchWorkflow:
                 await self._log(
                     {
                         "type": "info",
-                        "message": f"Conducting follow-up research (iteration {self.iteration})...",
+                        "message": f"Conducting follow-up research (iteration {self.iteration} of {self.max_iterations - 1})...",
                     }
                 )
 
@@ -88,8 +94,18 @@ class ResearchWorkflow:
     async def generate_queries(self) -> QueryResponse:
         await self._log({"type": "status", "message": "Analyzing query..."})
 
-        # Run the query agent
-        result = await Runner.run(query_agent, input=self.query)
+        # Run the query agent with user research topic and breadth
+        target_query_count = max(3, min(6, self.breadth))
+        query_input = render_user_prompt(
+            "query.md",
+            {
+                "topic": self.query,
+                "breadth": self.breadth,
+                "depth": self.depth,
+                "target_query_count": target_query_count,
+            },
+        )
+        result = await Runner.run(query_agent, input=query_input)
 
         # Display the results
         await self._log({"type": "section", "title": "Query Analysis"})
@@ -102,6 +118,48 @@ class ResearchWorkflow:
 
         return result.final_output
 
+    @staticmethod
+    def _normalize_url(url: str) -> str:
+        """Normalize URL for deduplication by lowercasing scheme and netloc while preserving path and query case."""
+        try:
+            parts = urllib.parse.urlsplit(url.strip())
+            return urllib.parse.urlunsplit((
+                parts.scheme.lower(),
+                parts.netloc.lower(),
+                parts.path,
+                parts.query,
+                parts.fragment,
+            ))
+        except (ValueError, AttributeError):
+            return url.strip()
+
+    def _clean_search_query(self, query: str) -> str:
+        """Strip conversational questions, outer quotes, and stop-word prefixes for search engine relevance."""
+        import re
+        q = query.strip()
+        # Strip enclosing quotes and backticks
+        q = re.sub(r'^["\'`“”‘’]+|["\'`“”‘’]+$', '', q).strip()
+        # Remove internal quotes which force brittle exact-phrase matches in search engines
+        q = re.sub(r'["\'`“”‘’]', ' ', q)
+        # Remove conversational question starters
+        q = re.sub(
+            r"^(what\s+(is|are|was|were|will|can)|how\s+(do|does|can|will|should)|why\s+(do|does|is|are)|when\s+(will|did)|can\s+you\s+(find|search|tell))\s+",
+            "",
+            q,
+            flags=re.IGNORECASE,
+        )
+        q = re.sub(r"^(what|how|why|where)\s+", "", q, flags=re.IGNORECASE)
+        q = re.sub(r"^(the|a|an)\s+", "", q, flags=re.IGNORECASE)
+        # Strip trailing punctuation and question marks
+        q = re.sub(r"[?!.]+$", "", q).strip()
+        # Collapse multiple spaces
+        q = re.sub(r"\s+", " ", q).strip()
+        # If query became too short, fallback to original query stripped of punctuation
+        if len(q.split()) < 2:
+            q = re.sub(r"[?!.]+$", "", query).strip()
+            q = re.sub(r'["\'`“”‘’]', '', q).strip()
+        return q
+
     def _sync_ddgs_search(self, query: str):
         blocked_domains = [
             "baidu.com",
@@ -113,16 +171,38 @@ class ResearchWorkflow:
             "cpsenglish.com",
             "ell.stackexchange.com",
             "forum.wordreference.com",
+            # Block generic dictionary / thesaurus definitions that hijack search keywords
+            "merriam-webster.com",
+            "dictionary.cambridge.org",
+            "dictionary.com",
+            "thesaurus.com",
+            "thefreedictionary.com",
+            "vocabulary.com",
+            "collinsdictionary.com",
+            "definitions.net",
+            "wiktionary.org",
+            "usdictionary.com",
+            "oxfordlearnersdictionaries.com",
+            "macmillandictionary.com",
+            "yourdictionary.com",
+            "urbandictionary.com",
+            # Block unrelated betting / entertainment aggregators that match 'prediction' or artist names
+            "forebet.com",
+            "predictz.com",
+            "footballpredictions.com",
+            "pickswise.com",
+            "dimers.com",
+            "ticketmaster.com",
+            "genius.com",
         ]
         blocked_tlds = [".cn", ".jp", ".kr", ".ru"]
 
+        cleaned_query = self._clean_search_query(query)
+
         # Backends to try:
-        # 1. None: ddgs default (backend="auto") queries all underlying search engines
-        #    in parallel (duckduckgo, brave, startpage, mojeek, yahoo, wikipedia, grokipedia)
-        #    and aggregates results from whichever succeed.
-        # 2. "yahoo": targeted fallback if the multi-engine 'auto' pool throws a transient
-        #    bot/rate-limit error (e.g. from cloud datacenter IP ranges).
-        backends_to_try: list[str | None] = [None, "yahoo"]
+        # 1. "yahoo": fast, highly reliable across cloud datacenter IPs, returns authoritative web articles.
+        # 2. None (ddgs auto multi-engine pool): queries across available engines as fallback.
+        backends_to_try: list[str | None] = ["yahoo", None]
         results: list[dict[str, Any]] = []
         last_err: Exception | None = None
 
@@ -135,36 +215,49 @@ class ResearchWorkflow:
                     if backend:
                         kwargs["backend"] = backend
 
-                    res = DDGS().text(query, **kwargs)
+                    res = DDGS().text(cleaned_query, **kwargs)
                     if res:
                         results = list(res)
                         break
                 except Exception as e:  # noqa: BLE001
                     last_err = e
-                    time.sleep(0.5 * (attempt + 1))
+                    time.sleep(0.4 * (attempt + 1))
                     continue
             if results:
                 break
+
+        # If cleaned query had no results, attempt with raw query once
+        if not results and cleaned_query != query:
+            try:
+                res = DDGS().text(query, backend="yahoo", max_results=self.max_results_per_query * 3)
+                if res:
+                    results = list(res)
+            except Exception as e:  # noqa: BLE001
+                last_err = e
 
         if not results and last_err:
             raise last_err
 
         filtered_results = []
+        seen_urls = set()
         for r in results:
-            url = r.get("href", "").lower()
-            if any(domain in url for domain in blocked_domains):
+            raw_url = r.get("href", "")
+            if not raw_url:
                 continue
-            if any(url.endswith(tld) or f"{tld}/" in url for tld in blocked_tlds):
+            normalized_url = self._normalize_url(raw_url)
+            if normalized_url in seen_urls:
                 continue
+            url_lower = raw_url.lower()
+            if any(domain in url_lower for domain in blocked_domains):
+                continue
+            if any(url_lower.endswith(tld) or f"{tld}/" in url_lower for tld in blocked_tlds):
+                continue
+            seen_urls.add(normalized_url)
             filtered_results.append(r)
             if len(filtered_results) >= self.max_results_per_query:
                 break
 
-        return (
-            filtered_results
-            if filtered_results
-            else results[: self.max_results_per_query]
-        )
+        return filtered_results
 
     async def duckduckgo_search(self, query: str):
         try:
@@ -203,7 +296,14 @@ class ResearchWorkflow:
                 await self._log({"type": "status", "message": "Analyzing content..."})
 
                 start_analysis_time = time.time()
-                search_input = f"Title: {result['title']}\nURL: {result['href']}"
+                search_input = render_user_prompt(
+                    "search.md",
+                    {
+                        "topic": self.query,
+                        "title": result["title"],
+                        "url": result["href"],
+                    },
+                )
                 agent_result = await Runner.run(search_agent, input=search_input)
                 analysis_time = time.time() - start_analysis_time
 
@@ -211,6 +311,8 @@ class ResearchWorkflow:
                     title=result["title"],
                     url=result["href"],
                     summary=agent_result.final_output,
+                    iteration=self.iteration,
+                    query=query,
                 )
 
                 self.search_results.append(search_result)
@@ -236,13 +338,120 @@ class ResearchWorkflow:
             }
         )
 
+    def _is_valid_summary(self, text: str) -> bool:
+        clean = text.strip().lower()
+        return (
+            len(clean) >= 30
+            and "failed to scrape content" not in clean
+            and "does not contain substantive findings" not in clean
+        )
+
+    def _estimate_tokens(self, text: str) -> int:
+        """Estimate token count (~4 characters per token for English text)."""
+        return max(1, len(text) // 4)
+
+    def _select_representative_sources(
+        self,
+        sources: list[SearchResult],
+        max_sources: int | None = None,
+        max_tokens: int | None = None,
+    ) -> list[SearchResult]:
+        """Select sources using round-robin coverage across (iteration, query) within source and token budgets."""
+        if not sources:
+            return []
+
+        by_round_and_query: dict[tuple[int, str], list[SearchResult]] = {}
+        for item in sources:
+            by_round_and_query.setdefault((item.iteration, item.query), []).append(item)
+
+        selected: list[SearchResult] = []
+        accumulated_tokens = 0
+        query_queues = [list(q) for q in by_round_and_query.values()]
+
+        while (max_sources is None or len(selected) < max_sources) and any(query_queues):
+            added_in_pass = False
+            for q in query_queues:
+                if not q or (max_sources is not None and len(selected) >= max_sources):
+                    continue
+                candidate = q[0]
+                source_tokens = self._estimate_tokens(
+                    f"{candidate.title} {candidate.url} {candidate.summary}"
+                )
+                if selected and max_tokens is not None and (accumulated_tokens + source_tokens > max_tokens):
+                    continue
+                selected.append(q.pop(0))
+                accumulated_tokens += source_tokens
+                added_in_pass = True
+
+            if not added_in_pass:
+                break
+
+        return selected
+
     async def synthesis_report(self) -> str:
         await self._log(
             {"type": "status", "message": "Synthesizing research findings..."}
         )
-        findings_text = f"Query: {self.query}\n\nSearch Results:\n"
-        for i, result in enumerate(self.search_results, 1):
-            findings_text += f"\n{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}\n"
+
+        # Tier 2 & Tier 3 filtering: deduplicate by URL and retain substantive findings
+        valid_results: list[SearchResult] = []
+        seen_urls = set()
+        for res in self.search_results:
+            clean_url = self._normalize_url(res.url)
+            if clean_url in seen_urls:
+                continue
+            if not self._is_valid_summary(res.summary):
+                continue
+            seen_urls.add(clean_url)
+            valid_results.append(res)
+
+        # Do not restore rejected triage statements or failed scrapes when no sources pass validation
+        sources_to_synthesize = valid_results
+
+        # Dual Budgeting: max 50 sources and max 15,000 tokens (~60k chars) with round-robin coverage
+        selected_sources = self._select_representative_sources(
+            sources_to_synthesize,
+            max_sources=50,
+            max_tokens=15000,
+        )
+
+        if self.depth <= 1:
+            scope_desc = "Quick Overview (Target: 4-5 focused sections, key findings, and direct answers)"
+            scope_directives = (
+                "Target 4-5 focused sections, concise key takeaways, and direct answers without exhaustive depth."
+            )
+        elif self.depth == 2:
+            scope_desc = "Standard Deep Dive (Target: 5-6 detailed sections with technical nuance)"
+            scope_directives = (
+                "Target 5-6 detailed sections with technical nuance, architectural mechanisms, and benchmark comparisons."
+            )
+        else:
+            scope_desc = f"Comprehensive Technical Investigation (Target: Exhaustive multi-section whitepaper, deep architectural analysis, empirical comparisons, and future outlook - Depth {self.depth}, Breadth {self.breadth})"
+            scope_directives = (
+                "Write an exhaustive, deeply technical whitepaper covering underlying architectures, empirical comparisons, trade-offs, edge cases, implementation nuances, and future outlook."
+            )
+
+        sources_block = (
+            "\n".join(
+                f"{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}"
+                for i, result in enumerate(selected_sources, 1)
+            )
+            if selected_sources
+            else "No substantive empirical evidence could be retrieved for this topic."
+        )
+
+        findings_text = render_user_prompt(
+            "synthesis.md",
+            {
+                "topic": self.query,
+                "depth": self.depth,
+                "breadth": self.breadth,
+                "scope_desc": scope_desc,
+                "scope_directives": scope_directives,
+                "source_count": len(selected_sources),
+                "sources_block": sources_block,
+            },
+        )
 
         result = await Runner.run(synthesis_agent, input=findings_text)
 
@@ -252,9 +461,41 @@ class ResearchWorkflow:
         await self._log(
             {"type": "status", "message": "Evaluating if more research is needed..."}
         )
-        findings_text = f"Original Query: {self.query}\n\nCurrent Findings:\n"
-        for i, result in enumerate(self.search_results, 1):
-            findings_text += f"\n{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}\n"
+        # Filter for substantive, deduplicated evidence so the auditor has clean context
+        valid_results = [r for r in self.search_results if self._is_valid_summary(r.summary)]
+        unique_findings: list[SearchResult] = []
+        seen_urls = set()
+        for r in valid_results:
+            u = self._normalize_url(r.url)
+            if u not in seen_urls:
+                seen_urls.add(u)
+                unique_findings.append(r)
+
+        # Budget up to 10,000 tokens for follow-up findings using round-robin coverage so later rounds are represented
+        selected_findings = self._select_representative_sources(
+            unique_findings,
+            max_sources=None,
+            max_tokens=10000,
+        )
+
+        findings_block = (
+            "\n".join(
+                f"{i}. Title: {result.title}\n   Query: {result.query}\n   URL: {result.url}\n   Summary: {result.summary}"
+                for i, result in enumerate(selected_findings, 1)
+            )
+            if selected_findings
+            else "No substantive findings collected yet."
+        )
+        findings_text = render_user_prompt(
+            "follow_up.md",
+            {
+                "topic": self.query,
+                "iteration": self.iteration,
+                "depth": self.depth,
+                "total_sources": len(unique_findings),
+                "recent_findings": findings_block,
+            },
+        )
 
         result = await Runner.run(follow_up_decision_agent, input=findings_text)
 
