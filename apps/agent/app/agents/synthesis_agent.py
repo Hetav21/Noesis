@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from agents import Agent
 
 from app.config import get_agent_settings

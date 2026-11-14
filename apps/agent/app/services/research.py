@@ -130,7 +130,7 @@ class ResearchWorkflow:
                 parts.query,
                 parts.fragment,
             ))
-        except Exception:
+        except (ValueError, AttributeError):
             return url.strip()
 
     def _clean_search_query(self, query: str) -> str:
@@ -367,8 +367,8 @@ class ResearchWorkflow:
             seen_urls.add(clean_url)
             valid_results.append(res)
 
-        # If too few valid sources survived filtering, use available search results
-        sources_to_synthesize = valid_results if valid_results else self.search_results
+        # Do not restore rejected triage statements or failed scrapes when no sources pass validation
+        sources_to_synthesize = valid_results
 
         # Dual Budgeting:
         # 1. Max source count ceiling (up to 50 sources)
@@ -421,9 +421,13 @@ class ResearchWorkflow:
                 "Write an exhaustive, deeply technical whitepaper covering underlying architectures, empirical comparisons, trade-offs, edge cases, implementation nuances, and future outlook."
             )
 
-        sources_block = "\n".join(
-            f"{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}"
-            for i, result in enumerate(selected_sources, 1)
+        sources_block = (
+            "\n".join(
+                f"{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}"
+                for i, result in enumerate(selected_sources, 1)
+            )
+            if selected_sources
+            else "No substantive empirical evidence could be retrieved for this topic."
         )
 
         findings_text = render_user_prompt(
@@ -449,10 +453,9 @@ class ResearchWorkflow:
         )
         # Filter for substantive, deduplicated evidence so the auditor has clean context
         valid_results = [r for r in self.search_results if self._is_valid_summary(r.summary)]
-        candidates = valid_results if valid_results else self.search_results
         unique_findings: list[SearchResult] = []
         seen_urls = set()
-        for r in candidates:
+        for r in valid_results:
             u = self._normalize_url(r.url)
             if u not in seen_urls:
                 seen_urls.add(u)
@@ -469,9 +472,13 @@ class ResearchWorkflow:
             selected_findings.append(r)
             accumulated_tokens += t
 
-        findings_block = "\n".join(
-            f"{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}"
-            for i, result in enumerate(selected_findings, 1)
+        findings_block = (
+            "\n".join(
+                f"{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}"
+                for i, result in enumerate(selected_findings, 1)
+            )
+            if selected_findings
+            else "No substantive findings collected yet."
         )
         findings_text = render_user_prompt(
             "follow_up.md",

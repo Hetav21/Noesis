@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from agents import Agent
 from pydantic import BaseModel
 

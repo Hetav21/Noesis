@@ -272,10 +272,79 @@ async def test_cascading_filtering_and_token_budgeting():
     assert "Good Page" in captured_followup_input
 
 
+@pytest.mark.asyncio
+async def test_all_invalid_sources_never_restored():
+    from app.services.research import ResearchWorkflow, SearchResult
+
+    wf = ResearchWorkflow(
+        query="Obscure Topic",
+        log_callback=None,
+        depth=1,
+        breadth=2,
+    )
+    # Only invalid/rejected results
+    triage_rejected_1 = SearchResult(
+        title="Blocked Page 1",
+        url="https://paywall.com/article1",
+        summary="Source does not contain substantive findings on the topic.",
+        iteration=1,
+        query="query 1",
+    )
+    triage_rejected_2 = SearchResult(
+        title="Blocked Page 2",
+        url="https://scraper-fail.com/article2",
+        summary="Failed to scrape content from url: 403 Forbidden",
+        iteration=1,
+        query="query 2",
+    )
+    wf.search_results = [triage_rejected_1, triage_rejected_2]
+
+    captured_synthesis_input = None
+
+    async def mock_synthesis(agent, input):
+        nonlocal captured_synthesis_input
+        captured_synthesis_input = input
+        class MockResult:
+            final_output = "No info report"
+        return MockResult()
+
+    with patch("agents.Runner.run", side_effect=mock_synthesis):
+        await wf.synthesis_report()
+
+    assert captured_synthesis_input is not None
+    # Must NOT restore or leak the rejected summaries into synthesis
+    assert "Source does not contain substantive findings on the topic" not in captured_synthesis_input
+    assert "Failed to scrape content" not in captured_synthesis_input
+    assert "No substantive empirical evidence could be retrieved" in captured_synthesis_input
+
+    # Follow-up test
+    captured_followup_input = None
+
+    async def mock_followup(agent, input):
+        nonlocal captured_followup_input
+        captured_followup_input = input
+        from app.agents.follow_up_agent import FollowUpDecisionResponse
+        class MockResult:
+            final_output = FollowUpDecisionResponse(
+                should_follow_up=False,
+                reasoning="Nothing found.",
+                queries=[],
+            )
+        return MockResult()
+
+    with patch("agents.Runner.run", side_effect=mock_followup):
+        await wf.generate_followup()
+
+    assert captured_followup_input is not None
+    assert "Source does not contain substantive findings on the topic" not in captured_followup_input
+    assert "No substantive findings collected yet" in captured_followup_input
+
+
 if __name__ == "__main__":
     test_agents()
     test_research_workflow_config_and_cleaning()
     asyncio.run(test_url_normalization_and_representative_selection())
     asyncio.run(test_cascading_filtering_and_token_budgeting())
+    asyncio.run(test_all_invalid_sources_never_restored())
     test_prompt_loader()
 
