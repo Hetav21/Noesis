@@ -102,52 +102,48 @@ def test_url_normalization_and_representative_selection():
     assert valid_results[0].title == "Doc 1 Success"
     assert valid_results[0].iteration == 2
 
-    # Test representative source selection across iterations
-    # Create 30 sources: 15 from iteration 1, 10 from iteration 2, 5 from iteration 3
+    # Test representative source selection across both iterations and queries within each round
+    # Scenario matching CodeRabbit review:
+    # 2 rounds, each with 4 queries, 10 sources per query = 80 total sources
     sources = []
-    for i in range(15):
-        sources.append(SearchResult(
-            title=f"Source Iter1-{i}",
-            url=f"https://source1-{i}.org/page",
-            summary=f"Substantial technical summary for source {i} in round 1.",
-            iteration=1,
-        ))
-    for i in range(10):
-        sources.append(SearchResult(
-            title=f"Source Iter2-{i}",
-            url=f"https://source2-{i}.org/page",
-            summary=f"Substantial technical summary for source {i} in round 2.",
-            iteration=2,
-        ))
-    for i in range(5):
-        sources.append(SearchResult(
-            title=f"Source Iter3-{i}",
-            url=f"https://source3-{i}.org/page",
-            summary=f"Substantial technical summary for source {i} in round 3.",
-            iteration=3,
-        ))
+    for round_num in (1, 2):
+        for q_idx in range(1, 5):
+            query_name = f"Round{round_num}_Query{q_idx}"
+            for s_idx in range(10):
+                sources.append(SearchResult(
+                    title=f"Source {query_name}_{s_idx}",
+                    url=f"https://source-{round_num}-{q_idx}-{s_idx}.org/page",
+                    summary=f"Technical findings for {query_name} item {s_idx}.",
+                    iteration=round_num,
+                    query=query_name,
+                ))
 
-    # For depth=3, max_synthesis_sources = min(30, max(10, 3 * 7)) = 21
-    max_synthesis = min(len(sources), max(10, wf.depth * 7))
-    assert max_synthesis == 21
+    # Capped at 35 sources
+    max_synthesis = 35
 
-    by_iteration = {}
+    by_round_and_query = {}
     for item in sources:
-        by_iteration.setdefault(item.iteration, []).append(item)
+        by_round_and_query.setdefault((item.iteration, item.query), []).append(item)
 
     selected = []
-    iter_queues = [list(q) for q in by_iteration.values()]
-    while len(selected) < max_synthesis and any(iter_queues):
-        for q in iter_queues:
+    query_queues = [list(q) for q in by_round_and_query.values()]
+    while len(selected) < max_synthesis and any(query_queues):
+        for q in query_queues:
             if q and len(selected) < max_synthesis:
                 selected.append(q.pop(0))
 
-    assert len(selected) == 21
-    iterations_in_selection = {item.iteration for item in selected}
-    # All 3 iterations MUST be represented
-    assert iterations_in_selection == {1, 2, 3}
-    iter3_count = sum(1 for item in selected if item.iteration == 3)
-    assert iter3_count == 5  # All 5 available from iteration 3 got selected
+    assert len(selected) == 35
+    # Verify that EVERY query across BOTH rounds is represented
+    represented_queries = {item.query for item in selected}
+    expected_queries = {
+        "Round1_Query1", "Round1_Query2", "Round1_Query3", "Round1_Query4",
+        "Round2_Query1", "Round2_Query2", "Round2_Query3", "Round2_Query4",
+    }
+    assert represented_queries == expected_queries
+    # Each query gets 4 or 5 sources (35 / 8 = 4 remainder 3)
+    for q in expected_queries:
+        count = sum(1 for item in selected if item.query == q)
+        assert count in (4, 5)
 
 
 def test_prompt_loader():

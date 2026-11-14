@@ -24,6 +24,7 @@ class SearchResult(BaseModel):
     url: str
     summary: str
     iteration: int = 1
+    query: str = ""
 
 
 class ResearchWorkflow:
@@ -304,6 +305,7 @@ class ResearchWorkflow:
                     url=result["href"],
                     summary=agent_result.final_output,
                     iteration=self.iteration,
+                    query=query,
                 )
 
                 self.search_results.append(search_result)
@@ -359,15 +361,15 @@ class ResearchWorkflow:
         if len(sources_to_synthesize) <= max_synthesis_sources:
             selected_sources = list(sources_to_synthesize)
         else:
-            # Group sources by iteration to ensure representative selection across rounds
-            by_iteration: dict[int, list[SearchResult]] = {}
+            # Group sources by (iteration, query) to ensure representative selection across rounds and search vectors
+            by_round_and_query: dict[tuple[int, str], list[SearchResult]] = {}
             for item in sources_to_synthesize:
-                by_iteration.setdefault(item.iteration, []).append(item)
+                by_round_and_query.setdefault((item.iteration, item.query), []).append(item)
 
             selected_sources: list[SearchResult] = []
-            iter_queues = [list(q) for q in by_iteration.values()]
-            while len(selected_sources) < max_synthesis_sources and any(iter_queues):
-                for q in iter_queues:
+            query_queues = [list(q) for q in by_round_and_query.values()]
+            while len(selected_sources) < max_synthesis_sources and any(query_queues):
+                for q in query_queues:
                     if q and len(selected_sources) < max_synthesis_sources:
                         selected_sources.append(q.pop(0))
 
