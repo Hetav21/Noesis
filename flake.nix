@@ -23,6 +23,7 @@
           uv
           nodejs_22
           bun
+          postgresql
           playwright-driver.browsers
           render-cli
           vercel-cli
