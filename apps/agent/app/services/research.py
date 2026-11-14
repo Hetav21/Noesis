@@ -16,6 +16,7 @@ from app.agents.follow_up_agent import (
 from app.agents.query_agent import QueryResponse, query_agent
 from app.agents.search_agent import search_agent
 from app.agents.synthesis_agent import synthesis_agent
+from app.services.prompt_loader import render_user_prompt
 
 
 class SearchResult(BaseModel):
@@ -93,10 +94,15 @@ class ResearchWorkflow:
         await self._log({"type": "status", "message": "Analyzing query..."})
 
         # Run the query agent with user research topic and breadth
-        query_input = (
-            f"Topic: {self.query}\n"
-            f"Configured Breadth: {self.breadth} sources per query\n"
-            f"Configured Depth: {self.depth} rounds"
+        target_query_count = max(3, min(6, self.breadth))
+        query_input = render_user_prompt(
+            "query.md",
+            {
+                "topic": self.query,
+                "breadth": self.breadth,
+                "depth": self.depth,
+                "target_query_count": target_query_count,
+            },
         )
         result = await Runner.run(query_agent, input=query_input)
 
@@ -282,10 +288,13 @@ class ResearchWorkflow:
                 await self._log({"type": "status", "message": "Analyzing content..."})
 
                 start_analysis_time = time.time()
-                search_input = (
-                    f"Research Topic: {self.query}\n"
-                    f"Page Title: {result['title']}\n"
-                    f"URL: {result['href']}"
+                search_input = render_user_prompt(
+                    "search.md",
+                    {
+                        "topic": self.query,
+                        "title": result["title"],
+                        "url": result["href"],
+                    },
                 )
                 agent_result = await Runner.run(search_agent, input=search_input)
                 analysis_time = time.time() - start_analysis_time
@@ -362,24 +371,39 @@ class ResearchWorkflow:
                     if q and len(selected_sources) < max_synthesis_sources:
                         selected_sources.append(q.pop(0))
 
-        scope_desc = (
-            "Quick Overview (Target: 4-5 focused sections, key findings, and direct answers)"
-            if self.depth <= 1
-            else (
-                "Standard Deep Dive (Target: 5-6 detailed sections with technical nuance)"
-                if self.depth == 2
-                else f"Comprehensive Technical Investigation (Target: Exhaustive multi-section whitepaper, deep architectural analysis, empirical comparisons, and future outlook - Depth {self.depth}, Breadth {self.breadth})"
+        if self.depth <= 1:
+            scope_desc = "Quick Overview (Target: 4-5 focused sections, key findings, and direct answers)"
+            scope_directives = (
+                "Target 4-5 focused sections, concise key takeaways, and direct answers without exhaustive depth."
             )
+        elif self.depth == 2:
+            scope_desc = "Standard Deep Dive (Target: 5-6 detailed sections with technical nuance)"
+            scope_directives = (
+                "Target 5-6 detailed sections with technical nuance, architectural mechanisms, and benchmark comparisons."
+            )
+        else:
+            scope_desc = f"Comprehensive Technical Investigation (Target: Exhaustive multi-section whitepaper, deep architectural analysis, empirical comparisons, and future outlook - Depth {self.depth}, Breadth {self.breadth})"
+            scope_directives = (
+                "Write an exhaustive, deeply technical whitepaper covering underlying architectures, empirical comparisons, trade-offs, edge cases, implementation nuances, and future outlook."
+            )
+
+        sources_block = "\n".join(
+            f"{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}"
+            for i, result in enumerate(selected_sources, 1)
         )
 
-        findings_text = (
-            f"Research Inquiry: {self.query}\n"
-            f"Target Scope: {scope_desc}\n"
-            f"Configured Depth: {self.depth} rounds | Configured Breadth: {self.breadth} sources/query\n\n"
-            f"Curated Evidence Base ({len(selected_sources)} Sources):\n"
+        findings_text = render_user_prompt(
+            "synthesis.md",
+            {
+                "topic": self.query,
+                "depth": self.depth,
+                "breadth": self.breadth,
+                "scope_desc": scope_desc,
+                "scope_directives": scope_directives,
+                "source_count": len(selected_sources),
+                "sources_block": sources_block,
+            },
         )
-        for i, result in enumerate(selected_sources, 1):
-            findings_text += f"\n{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}\n"
 
         result = await Runner.run(synthesis_agent, input=findings_text)
 
@@ -390,16 +414,21 @@ class ResearchWorkflow:
             {"type": "status", "message": "Evaluating if more research is needed..."}
         )
         # Give follow-up agent progress context: iteration vs target depth
-        findings_text = (
-            f"Original Query: {self.query}\n"
-            f"Progress: Iteration {self.iteration} of {self.depth} target depth rounds\n"
-            f"Total Sources Found So Far: {len(self.search_results)}\n\n"
-            f"Current Findings:\n"
-        )
-        # Include the most recent findings to avoid context bloat
         recent_results = self.search_results[-20:]
-        for i, result in enumerate(recent_results, 1):
-            findings_text += f"\n{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}\n"
+        recent_findings_text = "\n".join(
+            f"{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}"
+            for i, result in enumerate(recent_results, 1)
+        )
+        findings_text = render_user_prompt(
+            "follow_up.md",
+            {
+                "topic": self.query,
+                "iteration": self.iteration,
+                "depth": self.depth,
+                "total_sources": len(self.search_results),
+                "recent_findings": recent_findings_text,
+            },
+        )
 
         result = await Runner.run(follow_up_decision_agent, input=findings_text)
 

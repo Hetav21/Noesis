@@ -3,10 +3,9 @@ from pathlib import Path
 from agents import Agent
 
 from app.config import get_agent_settings
+from app.services.prompt_loader import load_system_prompt
 
-PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "synthesis.md"
-with open(PROMPT_PATH, "r", encoding="utf-8") as f:
-    SYNTHESIS_AGENT_PROMPT = f.read()
+SYNTHESIS_AGENT_PROMPT = load_system_prompt("synthesis.md")
 
 model, settings = get_agent_settings("SYNTHESIS_AGENT", "gpt-4o")
 

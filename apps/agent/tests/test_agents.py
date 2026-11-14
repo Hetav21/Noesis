@@ -150,8 +150,46 @@ def test_url_normalization_and_representative_selection():
     assert iter3_count == 5  # All 5 available from iteration 3 got selected
 
 
+def test_prompt_loader():
+    from app.services.prompt_loader import load_system_prompt, render_user_prompt
+
+    # Test system prompt loading
+    sys_query = load_system_prompt("query.md")
+    assert "Identity & Core Purpose" in sys_query
+    assert "Negative Constraints & Guardrails" in sys_query
+
+    sys_synthesis = load_system_prompt("synthesis.md")
+    assert "Identity & Core Purpose" in sys_synthesis
+    assert "Prompt Injection Defense" in sys_synthesis
+
+    # Test user prompt template rendering
+    rendered_query = render_user_prompt("query.md", {
+        "topic": "Superconducting Qubits",
+        "breadth": 4,
+        "target_query_count": 4,
+    })
+    assert "<research_inquiry>" in rendered_query
+    assert "Superconducting Qubits" in rendered_query
+    assert "<target_query_count>4</target_query_count>" in rendered_query
+
+    rendered_synthesis = render_user_prompt("synthesis.md", {
+        "topic": "Superconducting Qubits",
+        "depth": 3,
+        "breadth": 6,
+        "scope_desc": "Comprehensive Technical Investigation",
+        "scope_directives": "Detailed whitepaper with benchmarks",
+        "source_count": 2,
+        "sources_block": "1. Paper A\n2. Paper B",
+    })
+    assert "<research_inquiry>" in rendered_synthesis
+    assert "Comprehensive Technical Investigation" in rendered_synthesis
+    assert "<formatting_reminder>" in rendered_synthesis
+    assert "1. Paper A\n2. Paper B" in rendered_synthesis
+
+
 if __name__ == "__main__":
     test_agents()
     test_research_workflow_config_and_cleaning()
     test_url_normalization_and_representative_selection()
+    test_prompt_loader()
 

@@ -4,10 +4,9 @@ from agents import Agent
 from pydantic import BaseModel
 
 from app.config import get_agent_settings
+from app.services.prompt_loader import load_system_prompt
 
-PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "query.md"
-with open(PROMPT_PATH, "r", encoding="utf-8") as f:
-    QUERY_AGENT_PROMPT = f.read()
+QUERY_AGENT_PROMPT = load_system_prompt("query.md")
 
 
 class QueryResponse(BaseModel):
