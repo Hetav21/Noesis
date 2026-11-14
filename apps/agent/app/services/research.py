@@ -134,9 +134,13 @@ class ResearchWorkflow:
             return url.strip()
 
     def _clean_search_query(self, query: str) -> str:
-        """Strip conversational questions and stop-word prefixes for search engine relevance."""
+        """Strip conversational questions, outer quotes, and stop-word prefixes for search engine relevance."""
         import re
         q = query.strip()
+        # Strip enclosing quotes and backticks
+        q = re.sub(r'^["\'`“”‘’]+|["\'`“”‘’]+$', '', q).strip()
+        # Remove internal quotes which force brittle exact-phrase matches in search engines
+        q = re.sub(r'["\'`“”‘’]', ' ', q)
         # Remove conversational question starters
         q = re.sub(
             r"^(what\s+(is|are|was|were|will|can)|how\s+(do|does|can|will|should)|why\s+(do|does|is|are)|when\s+(will|did)|can\s+you\s+(find|search|tell))\s+",
@@ -148,9 +152,12 @@ class ResearchWorkflow:
         q = re.sub(r"^(the|a|an)\s+", "", q, flags=re.IGNORECASE)
         # Strip trailing punctuation and question marks
         q = re.sub(r"[?!.]+$", "", q).strip()
+        # Collapse multiple spaces
+        q = re.sub(r"\s+", " ", q).strip()
         # If query became too short, fallback to original query stripped of punctuation
         if len(q.split()) < 2:
             q = re.sub(r"[?!.]+$", "", query).strip()
+            q = re.sub(r'["\'`“”‘’]', '', q).strip()
         return q
 
     def _sync_ddgs_search(self, query: str):

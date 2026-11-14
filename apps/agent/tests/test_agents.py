@@ -56,6 +56,14 @@ def test_research_workflow_config_and_cleaning():
     how_cleaned = wf._clean_search_query("How do leading experts predict AI will influence job markets?")
     assert how_cleaned == "leading experts predict AI will influence job markets"
 
+    quoted = wf._clean_search_query('"Bun Node.js HTTP throughput benchmark real world"')
+    assert quoted == "Bun Node.js HTTP throughput benchmark real world"
+    assert '"' not in quoted
+
+    smart_quoted = wf._clean_search_query('“Bun vs Node.js production deployment”')
+    assert smart_quoted == "Bun vs Node.js production deployment"
+    assert '“' not in smart_quoted and '”' not in smart_quoted
+
 
 @pytest.mark.asyncio
 async def test_url_normalization_and_representative_selection():
