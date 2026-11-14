@@ -117,7 +117,12 @@ class ResearchWorkflow:
         ]
         blocked_tlds = [".cn", ".jp", ".kr", ".ru"]
 
-        # Backends to try: standard multi-backend aggregation, followed by yahoo fallback
+        # Backends to try:
+        # 1. None: ddgs default (backend="auto") queries all underlying search engines
+        #    in parallel (duckduckgo, brave, startpage, mojeek, yahoo, wikipedia, grokipedia)
+        #    and aggregates results from whichever succeed.
+        # 2. "yahoo": targeted fallback if the multi-engine 'auto' pool throws a transient
+        #    bot/rate-limit error (e.g. from cloud datacenter IP ranges).
         backends_to_try: list[str | None] = [None, "yahoo"]
         results: list[dict[str, Any]] = []
 
