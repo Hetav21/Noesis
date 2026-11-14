@@ -1,0 +1,12 @@
+use flake
+
+# Render
+export RENDER_API_KEY="rnd_your_render_api_key_here"
+export RENDER_SERVICE_ID="srv-your_render_service_id"
+export RENDER_WORKSPACE_ID="tea-your_render_workspace_id"
+
+# Vercel
+export VERCEL_TOKEN="vcp_your_vercel_token_here"
+export VERCEL_ORG_ID="team_your_vercel_team_id"
+export VERCEL_PROJECT_ID="prj_your_web_project_id"
+export VERCEL_API_PROJECT_ID="prj_your_api_project_id"
