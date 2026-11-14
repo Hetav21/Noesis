@@ -9,15 +9,25 @@
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
+      vercel-cli = pkgs.writeShellScriptBin "vercel" ''
+        exec ${pkgs.nodejs_22}/bin/npx --yes vercel "$@"
+      '';
+      vc-cli = pkgs.writeShellScriptBin "vc" ''
+        exec ${pkgs.nodejs_22}/bin/npx --yes vercel "$@"
+      '';
     in
     {
       devShells.${system}.default = pkgs.mkShell {
         buildInputs = with pkgs; [
           python311
           uv
-          nodejs_20
+          nodejs_22
           bun
+          postgresql
           playwright-driver.browsers
+          render-cli
+          vercel-cli
+          vc-cli
         ];
 
         shellHook = ''
