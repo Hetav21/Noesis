@@ -20,63 +20,74 @@ Expects the following environment variables to be set in your shell environment:
 
 ## 1. Render Logs (Backend Agent)
 
-Use the official `render logs` command. The `--resources` flag is required.
+Use the official `render logs` command with the `--resources` flag.
 
 ```bash
-# View the last 50 log lines
+# View recent logs (default: latest 100)
 render logs --resources "$RENDER_SERVICE_ID" --limit 50
 
-# Live stream / tail logs
+# Live stream / tail new logs
 render logs --resources "$RENDER_SERVICE_ID" --tail
 
-# Filter by severity level (error, warn, info)
+# Filter by log level (error, warn, info)
 render logs --resources "$RENDER_SERVICE_ID" --level error
 
-# Search for specific text/exceptions
+# Search for specific text / exceptions
 render logs --resources "$RENDER_SERVICE_ID" --text "exception"
 
-# Structured JSON output for programmatic analysis
+# JSON output for structured programmatic analysis
 render logs --resources "$RENDER_SERVICE_ID" --output json --limit 20
 ```
 
-For advanced Render CLI options, REST API fallback, and container SSH access, see [references/render-logs.md](references/render-logs.md).
+> **Discoverability**: To see all supported filtering flags (`--start`, `--end`, `--status-code`, etc.), run:
+> ```bash
+> render logs --help
+> ```
+> If the CLI behavior differs or you need to inspect new Render CLI features, search the web or check `render --help`.
 
 ---
 
 ## 2. Vercel Logs (Frontend Web)
 
-Use the official `vercel` CLI. Pass `--token "$VERCEL_TOKEN"` and `--scope "$VERCEL_ORG_ID"` for non-interactive authentication.
+Use the official `vercel` CLI. Pass `--token "$VERCEL_TOKEN"` and `--scope "$VERCEL_ORG_ID"` for non-interactive execution.
 
 ```bash
-# List recent deployments to find deployment URLs
-vercel ls noesis --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+# List recent deployments to find deployment URLs / IDs
+vercel ls --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+
+# View recent runtime logs for the project
+vercel logs --project "$VERCEL_PROJECT_ID" --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+
+# Find runtime errors across environments
+vercel logs --project "$VERCEL_PROJECT_ID" --query 'level:error' --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+
+# Target a specific deployment
+vercel logs --deployment <deployment-url-or-id> --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+
+# Inspect CDN requests with HTTP status >= 500
+vercel logs requests --project "$VERCEL_PROJECT_ID" --query 'httpStatus >= 500' --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
 
 # Inspect deployment build status, duration, and function routes
 vercel inspect <deployment-url-or-id> --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
-
-# Live stream runtime logs
-vercel logs <deployment-url> --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID" --follow
-
-# Fetch latest deployment build/runtime events via REST API
-DEPLOY_ID=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
-  "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&limit=1" \
-  | python3 -c "import sys, json; print(json.load(sys.stdin)['deployments'][0]['uid'])")
-
-curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
-  "https://api.vercel.com/v3/deployments/$DEPLOY_ID/events?limit=30"
 ```
 
-For advanced Vercel CLI options and REST API details, see [references/vercel-logs.md](references/vercel-logs.md).
+> **Discoverability**: To see all query expressions, data sources (`runtime`, `requests`), and time window flags (`--since`, `--until`), run:
+> ```bash
+> vercel logs --help
+> vercel logs runtime --help
+> vercel logs requests --help
+> ```
+> If you need newer CLI features or query syntax updates, run `--help` or search the web directly rather than relying on cached assumptions.
 
 ---
 
 ## Common CLI Issues
 
 ### "No workspace set" (Render)
-If Render CLI asks to select a workspace, set it using the workspace variable:
+If Render CLI prompts to select a workspace, set it using the workspace variable:
 ```bash
 render workspace set "$RENDER_WORKSPACE_ID"
 ```
 
 ### "Missing token" or "Authentication required"
-Verify that `$RENDER_API_KEY` and `$VERCEL_TOKEN` are exported in the active shell.
+Verify that `$RENDER_API_KEY` and `$VERCEL_TOKEN` are exported in the active shell environment.
