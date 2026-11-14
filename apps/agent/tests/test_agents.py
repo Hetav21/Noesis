@@ -1,4 +1,8 @@
+import asyncio
 import os
+from unittest.mock import patch
+
+import pytest
 
 # Set env settings before importing the agents
 os.environ["QUERY_AGENT_MODEL"] = "gpt-4o"
@@ -53,13 +57,14 @@ def test_research_workflow_config_and_cleaning():
     assert how_cleaned == "leading experts predict AI will influence job markets"
 
 
-def test_url_normalization_and_representative_selection():
+@pytest.mark.asyncio
+async def test_url_normalization_and_representative_selection():
     from app.services.research import ResearchWorkflow, SearchResult
 
     wf = ResearchWorkflow(
         query="Quantum Computing Architecture",
         log_callback=None,
-        depth=3,
+        depth=5,
         breadth=4,
     )
 
@@ -71,41 +76,25 @@ def test_url_normalization_and_representative_selection():
     assert "/API/Path" in normalized
     assert "Query=Val" in normalized
 
-    # Test seen_urls with failure retry:
-    # URL first fails validation, second attempt succeeds
-    failed_result = SearchResult(
-        title="Doc 1 Failed",
+    # Test triage statement rejection and seen_urls failure retry:
+    # URL first fails validation (triage statement), second attempt succeeds
+    triage_failed = SearchResult(
+        title="Doc 1 Triage Rejection",
         url="https://example.com/paperA",
-        summary="failed to scrape content from web page",
+        summary="Source does not contain substantive findings on the topic.",
         iteration=1,
+        query="Round1_Query1",
     )
     succeeded_result = SearchResult(
         title="Doc 1 Success",
         url="https://example.com/paperA",
         summary="A comprehensive overview of superconducting qubits and circuit architectures.",
         iteration=2,
+        query="Round2_Query1",
     )
 
-    wf.search_results = [failed_result, succeeded_result]
-    valid_results = []
-    seen = set()
-    for res in wf.search_results:
-        clean_url = wf._normalize_url(res.url)
-        if clean_url in seen:
-            continue
-        if len(res.summary.strip()) < 30 or "failed to scrape content" in res.summary.lower():
-            continue
-        seen.add(clean_url)
-        valid_results.append(res)
-
-    assert len(valid_results) == 1
-    assert valid_results[0].title == "Doc 1 Success"
-    assert valid_results[0].iteration == 2
-
-    # Test representative source selection across both iterations and queries within each round
-    # Scenario matching CodeRabbit review:
     # 2 rounds, each with 4 queries, 10 sources per query = 80 total sources
-    sources = []
+    sources = [triage_failed, succeeded_result]
     for round_num in (1, 2):
         for q_idx in range(1, 5):
             query_name = f"Round{round_num}_Query{q_idx}"
@@ -113,37 +102,40 @@ def test_url_normalization_and_representative_selection():
                 sources.append(SearchResult(
                     title=f"Source {query_name}_{s_idx}",
                     url=f"https://source-{round_num}-{q_idx}-{s_idx}.org/page",
-                    summary=f"Technical findings for {query_name} item {s_idx}.",
+                    summary=f"Technical findings for {query_name} item {s_idx} with rigorous empirical data.",
                     iteration=round_num,
                     query=query_name,
                 ))
 
-    # Capped at 35 sources
-    max_synthesis = 35
+    wf.search_results = sources
 
-    by_round_and_query = {}
-    for item in sources:
-        by_round_and_query.setdefault((item.iteration, item.query), []).append(item)
+    captured_input = None
 
-    selected = []
-    query_queues = [list(q) for q in by_round_and_query.values()]
-    while len(selected) < max_synthesis and any(query_queues):
-        for q in query_queues:
-            if q and len(selected) < max_synthesis:
-                selected.append(q.pop(0))
+    async def mock_runner_run(agent, input):
+        nonlocal captured_input
+        captured_input = input
+        class MockResult:
+            final_output = "# Final Report\n\nContent synthesized successfully."
+        return MockResult()
 
-    assert len(selected) == 35
-    # Verify that EVERY query across BOTH rounds is represented
-    represented_queries = {item.query for item in selected}
-    expected_queries = {
+    with patch("agents.Runner.run", side_effect=mock_runner_run):
+        output = await wf.synthesis_report()
+
+    assert output == "# Final Report\n\nContent synthesized successfully."
+    assert captured_input is not None
+
+    # Triage statement should NOT be in the synthesized sources
+    assert "Doc 1 Triage Rejection" not in captured_input
+    # The valid re-scrape of the same URL MUST be in the synthesized sources
+    assert "Doc 1 Success" in captured_input
+
+    # All 8 queries across both rounds MUST be represented in the production selection
+    expected_queries = [
         "Round1_Query1", "Round1_Query2", "Round1_Query3", "Round1_Query4",
         "Round2_Query1", "Round2_Query2", "Round2_Query3", "Round2_Query4",
-    }
-    assert represented_queries == expected_queries
-    # Each query gets 4 or 5 sources (35 / 8 = 4 remainder 3)
+    ]
     for q in expected_queries:
-        count = sum(1 for item in selected if item.query == q)
-        assert count in (4, 5)
+        assert q in captured_input
 
 
 def test_prompt_loader():
@@ -186,6 +178,6 @@ def test_prompt_loader():
 if __name__ == "__main__":
     test_agents()
     test_research_workflow_config_and_cleaning()
-    test_url_normalization_and_representative_selection()
+    asyncio.run(test_url_normalization_and_representative_selection())
     test_prompt_loader()
 

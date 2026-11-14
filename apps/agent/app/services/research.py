@@ -336,6 +336,14 @@ class ResearchWorkflow:
             {"type": "status", "message": "Synthesizing research findings..."}
         )
 
+        def _is_valid_summary(text: str) -> bool:
+            clean = text.strip().lower()
+            return (
+                len(clean) >= 30
+                and "failed to scrape content" not in clean
+                and "does not contain substantive findings" not in clean
+            )
+
         # Deduplicate and prioritize sources with substantial summaries
         valid_results: list[SearchResult] = []
         seen_urls = set()
@@ -343,8 +351,8 @@ class ResearchWorkflow:
             clean_url = self._normalize_url(res.url)
             if clean_url in seen_urls:
                 continue
-            # Filter out error messages or completely empty summaries
-            if len(res.summary.strip()) < 30 or "failed to scrape content" in res.summary.lower():
+            # Filter out error messages, empty summaries, or triage rejections
+            if not _is_valid_summary(res.summary):
                 continue
             seen_urls.add(clean_url)
             valid_results.append(res)
