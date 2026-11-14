@@ -340,11 +340,70 @@ async def test_all_invalid_sources_never_restored():
     assert "No substantive findings collected yet" in captured_followup_input
 
 
+@pytest.mark.asyncio
+async def test_followup_selection_includes_later_rounds_within_budget():
+    from app.services.research import ResearchWorkflow, SearchResult
+
+    wf = ResearchWorkflow(
+        query="Byzantine Fault Tolerance",
+        log_callback=None,
+        depth=2,
+        breadth=4,
+    )
+
+    # Round 1: 15 sources each ~1,000 tokens (total 15,000 tokens, exceeding the 10,000 token limit)
+    sources = [
+        SearchResult(
+            title=f"Round 1 Source {i}",
+            url=f"https://round1.org/paper-{i}",
+            summary="A" * 4000,
+            iteration=1,
+            query="byzantine consensus fundamentals",
+        )
+        for i in range(15)
+    ]
+
+    # Round 2: A crucial gap-resolving finding
+    gap_solution = SearchResult(
+        title="Round 2 Crucial Gap Solution",
+        url="https://round2.org/gap-solution",
+        summary="Empirical benchmark data resolving the throughput bottleneck in asynchronous networks.",
+        iteration=2,
+        query="byzantine asynchronous throughput benchmark",
+    )
+    sources.append(gap_solution)
+
+    wf.search_results = sources
+
+    captured_followup_input = None
+
+    async def mock_followup(agent, input):
+        nonlocal captured_followup_input
+        captured_followup_input = input
+        from app.agents.follow_up_agent import FollowUpDecisionResponse
+        class MockResult:
+            final_output = FollowUpDecisionResponse(
+                should_follow_up=False,
+                reasoning="Gap resolved.",
+                queries=[],
+            )
+        return MockResult()
+
+    with patch("agents.Runner.run", side_effect=mock_followup):
+        await wf.generate_followup()
+
+    assert captured_followup_input is not None
+    # Crucial assertion: the later-round gap solution MUST appear in the follow-up prompt
+    assert "Round 2 Crucial Gap Solution" in captured_followup_input
+    assert "byzantine asynchronous throughput benchmark" in captured_followup_input
+
+
 if __name__ == "__main__":
     test_agents()
     test_research_workflow_config_and_cleaning()
     asyncio.run(test_url_normalization_and_representative_selection())
     asyncio.run(test_cascading_filtering_and_token_budgeting())
     asyncio.run(test_all_invalid_sources_never_restored())
+    asyncio.run(test_followup_selection_includes_later_rounds_within_budget())
     test_prompt_loader()
 

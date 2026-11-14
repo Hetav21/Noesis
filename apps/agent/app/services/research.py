@@ -350,6 +350,44 @@ class ResearchWorkflow:
         """Estimate token count (~4 characters per token for English text)."""
         return max(1, len(text) // 4)
 
+    def _select_representative_sources(
+        self,
+        sources: list[SearchResult],
+        max_sources: int | None = None,
+        max_tokens: int | None = None,
+    ) -> list[SearchResult]:
+        """Select sources using round-robin coverage across (iteration, query) within source and token budgets."""
+        if not sources:
+            return []
+
+        by_round_and_query: dict[tuple[int, str], list[SearchResult]] = {}
+        for item in sources:
+            by_round_and_query.setdefault((item.iteration, item.query), []).append(item)
+
+        selected: list[SearchResult] = []
+        accumulated_tokens = 0
+        query_queues = [list(q) for q in by_round_and_query.values()]
+
+        while (max_sources is None or len(selected) < max_sources) and any(query_queues):
+            added_in_pass = False
+            for q in query_queues:
+                if not q or (max_sources is not None and len(selected) >= max_sources):
+                    continue
+                candidate = q[0]
+                source_tokens = self._estimate_tokens(
+                    f"{candidate.title} {candidate.url} {candidate.summary}"
+                )
+                if selected and max_tokens is not None and (accumulated_tokens + source_tokens > max_tokens):
+                    continue
+                selected.append(q.pop(0))
+                accumulated_tokens += source_tokens
+                added_in_pass = True
+
+            if not added_in_pass:
+                break
+
+        return selected
+
     async def synthesis_report(self) -> str:
         await self._log(
             {"type": "status", "message": "Synthesizing research findings..."}
@@ -370,40 +408,12 @@ class ResearchWorkflow:
         # Do not restore rejected triage statements or failed scrapes when no sources pass validation
         sources_to_synthesize = valid_results
 
-        # Dual Budgeting:
-        # 1. Max source count ceiling (up to 50 sources)
-        # 2. Token budget ceiling (up to 15,000 tokens / ~60,000 chars)
-        # Includes all unique evidence by default; prevents "lost-in-the-middle" attention degradation on massive runs.
-        MAX_SYNTHESIS_SOURCES = 50
-        MAX_SYNTHESIS_TOKENS = 15000
-
-        # Group sources by (iteration, query) to ensure representative round-robin coverage across rounds
-        by_round_and_query: dict[tuple[int, str], list[SearchResult]] = {}
-        for item in sources_to_synthesize:
-            by_round_and_query.setdefault((item.iteration, item.query), []).append(item)
-
-        selected_sources: list[SearchResult] = []
-        accumulated_tokens = 0
-        query_queues = [list(q) for q in by_round_and_query.values()]
-
-        while len(selected_sources) < MAX_SYNTHESIS_SOURCES and any(query_queues):
-            added_in_pass = False
-            for q in query_queues:
-                if not q or len(selected_sources) >= MAX_SYNTHESIS_SOURCES:
-                    continue
-                candidate = q[0]
-                source_tokens = self._estimate_tokens(
-                    f"{candidate.title} {candidate.url} {candidate.summary}"
-                )
-                # Allow initial sources unconditionally; afterwards respect token ceiling
-                if selected_sources and (accumulated_tokens + source_tokens > MAX_SYNTHESIS_TOKENS):
-                    continue
-                selected_sources.append(q.pop(0))
-                accumulated_tokens += source_tokens
-                added_in_pass = True
-
-            if not added_in_pass:
-                break
+        # Dual Budgeting: max 50 sources and max 15,000 tokens (~60k chars) with round-robin coverage
+        selected_sources = self._select_representative_sources(
+            sources_to_synthesize,
+            max_sources=50,
+            max_tokens=15000,
+        )
 
         if self.depth <= 1:
             scope_desc = "Quick Overview (Target: 4-5 focused sections, key findings, and direct answers)"
@@ -461,20 +471,16 @@ class ResearchWorkflow:
                 seen_urls.add(u)
                 unique_findings.append(r)
 
-        # Budget up to 10,000 tokens for follow-up findings to avoid overflowing the auditor context
-        MAX_FOLLOWUP_TOKENS = 10000
-        selected_findings: list[SearchResult] = []
-        accumulated_tokens = 0
-        for r in unique_findings:
-            t = self._estimate_tokens(f"{r.title} {r.url} {r.summary}")
-            if selected_findings and (accumulated_tokens + t > MAX_FOLLOWUP_TOKENS):
-                break
-            selected_findings.append(r)
-            accumulated_tokens += t
+        # Budget up to 10,000 tokens for follow-up findings using round-robin coverage so later rounds are represented
+        selected_findings = self._select_representative_sources(
+            unique_findings,
+            max_sources=None,
+            max_tokens=10000,
+        )
 
         findings_block = (
             "\n".join(
-                f"{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}"
+                f"{i}. Title: {result.title}\n   Query: {result.query}\n   URL: {result.url}\n   Summary: {result.summary}"
                 for i, result in enumerate(selected_findings, 1)
             )
             if selected_findings
