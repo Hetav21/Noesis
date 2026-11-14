@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 from collections.abc import Callable
 from typing import Any
@@ -103,12 +104,6 @@ class ResearchWorkflow:
         return result.final_output
 
     def _sync_ddgs_search(self, query: str):
-        results = DDGS().text(
-            query,
-            region="in-en",
-            safesearch="moderate",
-            max_results=self.max_results_per_query * 3,
-        )
         blocked_domains = [
             "baidu.com",
             "zhihu.com",
@@ -121,6 +116,29 @@ class ResearchWorkflow:
             "forum.wordreference.com",
         ]
         blocked_tlds = [".cn", ".jp", ".kr", ".ru"]
+
+        # Backends to try: standard multi-backend aggregation, followed by yahoo fallback
+        backends_to_try: list[str | None] = [None, "yahoo"]
+        results: list[dict[str, Any]] = []
+
+        for backend in backends_to_try:
+            for attempt in range(2):
+                try:
+                    kwargs: dict[str, Any] = {
+                        "max_results": self.max_results_per_query * 3,
+                    }
+                    if backend:
+                        kwargs["backend"] = backend
+
+                    res = DDGS().text(query, **kwargs)
+                    if res:
+                        results = list(res)
+                        break
+                except Exception:
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+            if results:
+                break
 
         filtered_results = []
         for r in results:

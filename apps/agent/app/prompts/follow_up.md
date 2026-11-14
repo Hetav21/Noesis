@@ -5,5 +5,5 @@ IMPORTANT: For simple factual questions (e.g., 'How long do dogs live?', 'What i
 Complex questions about processes, comparisons, or multifaceted topics may need follow-ups, but simple factual questions rarely need more than one round of research. 
 
 If you think we have enough information, return should_follow_up=False. If you think we need to generate follow-up queries, return should_follow_up=True. 
-If you return True, you will also need to generate 2-3 follow-up queries that address specific gaps in the current findings. 
+If you return True, you will also need to generate 2-3 targeted follow-up queries that address specific gaps in the current findings.
 Always provide detailed reasoning for your decision.
