@@ -182,6 +182,10 @@ class ResearchWorkflow:
             "definitions.net",
             "wiktionary.org",
             "usdictionary.com",
+            "oxfordlearnersdictionaries.com",
+            "macmillandictionary.com",
+            "yourdictionary.com",
+            "urbandictionary.com",
             # Block unrelated betting / entertainment aggregators that match 'prediction' or artist names
             "forebet.com",
             "predictz.com",
@@ -253,11 +257,7 @@ class ResearchWorkflow:
             if len(filtered_results) >= self.max_results_per_query:
                 break
 
-        return (
-            filtered_results
-            if filtered_results
-            else results[: self.max_results_per_query]
-        )
+        return filtered_results
 
     async def duckduckgo_search(self, query: str):
         try:
@@ -338,54 +338,72 @@ class ResearchWorkflow:
             }
         )
 
+    def _is_valid_summary(self, text: str) -> bool:
+        clean = text.strip().lower()
+        return (
+            len(clean) >= 30
+            and "failed to scrape content" not in clean
+            and "does not contain substantive findings" not in clean
+        )
+
+    def _estimate_tokens(self, text: str) -> int:
+        """Estimate token count (~4 characters per token for English text)."""
+        return max(1, len(text) // 4)
+
     async def synthesis_report(self) -> str:
         await self._log(
             {"type": "status", "message": "Synthesizing research findings..."}
         )
 
-        def _is_valid_summary(text: str) -> bool:
-            clean = text.strip().lower()
-            return (
-                len(clean) >= 30
-                and "failed to scrape content" not in clean
-                and "does not contain substantive findings" not in clean
-            )
-
-        # Deduplicate and prioritize sources with substantial summaries
+        # Tier 2 & Tier 3 filtering: deduplicate by URL and retain substantive findings
         valid_results: list[SearchResult] = []
         seen_urls = set()
         for res in self.search_results:
             clean_url = self._normalize_url(res.url)
             if clean_url in seen_urls:
                 continue
-            # Filter out error messages, empty summaries, or triage rejections
-            if not _is_valid_summary(res.summary):
+            if not self._is_valid_summary(res.summary):
                 continue
             seen_urls.add(clean_url)
             valid_results.append(res)
 
-        # If too few valid sources survived filtering, use all available search results
+        # If too few valid sources survived filtering, use available search results
         sources_to_synthesize = valid_results if valid_results else self.search_results
 
-        # Prioritize and include all substantive deduplicated sources gathered across the research workflow.
-        # Enforce a safety ceiling (up to 50 sources or ~15k tokens) to prevent attention dilution
-        # and context overflow only when large search runs accumulate massive evidence volumes.
-        max_synthesis_sources = min(len(sources_to_synthesize), 50)
+        # Dual Budgeting:
+        # 1. Max source count ceiling (up to 50 sources)
+        # 2. Token budget ceiling (up to 15,000 tokens / ~60,000 chars)
+        # Includes all unique evidence by default; prevents "lost-in-the-middle" attention degradation on massive runs.
+        MAX_SYNTHESIS_SOURCES = 50
+        MAX_SYNTHESIS_TOKENS = 15000
 
-        if len(sources_to_synthesize) <= max_synthesis_sources:
-            selected_sources = list(sources_to_synthesize)
-        else:
-            # Group sources by (iteration, query) to ensure representative selection across rounds and search vectors
-            by_round_and_query: dict[tuple[int, str], list[SearchResult]] = {}
-            for item in sources_to_synthesize:
-                by_round_and_query.setdefault((item.iteration, item.query), []).append(item)
+        # Group sources by (iteration, query) to ensure representative round-robin coverage across rounds
+        by_round_and_query: dict[tuple[int, str], list[SearchResult]] = {}
+        for item in sources_to_synthesize:
+            by_round_and_query.setdefault((item.iteration, item.query), []).append(item)
 
-            selected_sources: list[SearchResult] = []
-            query_queues = [list(q) for q in by_round_and_query.values()]
-            while len(selected_sources) < max_synthesis_sources and any(query_queues):
-                for q in query_queues:
-                    if q and len(selected_sources) < max_synthesis_sources:
-                        selected_sources.append(q.pop(0))
+        selected_sources: list[SearchResult] = []
+        accumulated_tokens = 0
+        query_queues = [list(q) for q in by_round_and_query.values()]
+
+        while len(selected_sources) < MAX_SYNTHESIS_SOURCES and any(query_queues):
+            added_in_pass = False
+            for q in query_queues:
+                if not q or len(selected_sources) >= MAX_SYNTHESIS_SOURCES:
+                    continue
+                candidate = q[0]
+                source_tokens = self._estimate_tokens(
+                    f"{candidate.title} {candidate.url} {candidate.summary}"
+                )
+                # Allow initial sources unconditionally; afterwards respect token ceiling
+                if selected_sources and (accumulated_tokens + source_tokens > MAX_SYNTHESIS_TOKENS):
+                    continue
+                selected_sources.append(q.pop(0))
+                accumulated_tokens += source_tokens
+                added_in_pass = True
+
+            if not added_in_pass:
+                break
 
         if self.depth <= 1:
             scope_desc = "Quick Overview (Target: 4-5 focused sections, key findings, and direct answers)"
@@ -429,10 +447,31 @@ class ResearchWorkflow:
         await self._log(
             {"type": "status", "message": "Evaluating if more research is needed..."}
         )
-        # Provide full accumulated research evidence to the follow-up auditor for complete cross-round gap analysis
+        # Filter for substantive, deduplicated evidence so the auditor has clean context
+        valid_results = [r for r in self.search_results if self._is_valid_summary(r.summary)]
+        candidates = valid_results if valid_results else self.search_results
+        unique_findings: list[SearchResult] = []
+        seen_urls = set()
+        for r in candidates:
+            u = self._normalize_url(r.url)
+            if u not in seen_urls:
+                seen_urls.add(u)
+                unique_findings.append(r)
+
+        # Budget up to 10,000 tokens for follow-up findings to avoid overflowing the auditor context
+        MAX_FOLLOWUP_TOKENS = 10000
+        selected_findings: list[SearchResult] = []
+        accumulated_tokens = 0
+        for r in unique_findings:
+            t = self._estimate_tokens(f"{r.title} {r.url} {r.summary}")
+            if selected_findings and (accumulated_tokens + t > MAX_FOLLOWUP_TOKENS):
+                break
+            selected_findings.append(r)
+            accumulated_tokens += t
+
         findings_block = "\n".join(
             f"{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}"
-            for i, result in enumerate(self.search_results, 1)
+            for i, result in enumerate(selected_findings, 1)
         )
         findings_text = render_user_prompt(
             "follow_up.md",
@@ -440,7 +479,7 @@ class ResearchWorkflow:
                 "topic": self.query,
                 "iteration": self.iteration,
                 "depth": self.depth,
-                "total_sources": len(self.search_results),
+                "total_sources": len(unique_findings),
                 "recent_findings": findings_block,
             },
         )

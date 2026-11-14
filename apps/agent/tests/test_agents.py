@@ -183,9 +183,99 @@ def test_prompt_loader():
     assert "1. Paper A\n2. Paper B" in rendered_synthesis
 
 
+@pytest.mark.asyncio
+async def test_cascading_filtering_and_token_budgeting():
+    from app.services.research import ResearchWorkflow, SearchResult
+
+    wf = ResearchWorkflow(
+        query="Distributed Systems Consensus",
+        log_callback=None,
+        depth=3,
+        breadth=5,
+    )
+
+    # 1. Test _is_valid_summary (Tier 2 & Tier 3 filtering)
+    assert not wf._is_valid_summary("too short")
+    assert not wf._is_valid_summary("Error: Failed to scrape content from url")
+    assert not wf._is_valid_summary("Source does not contain substantive findings on the topic.")
+    assert wf._is_valid_summary("Raft provides consensus via leader election, log replication, and safety invariants across distributed cluster nodes.")
+
+    # 2. Test token estimation
+    sample_text = "a" * 400
+    assert wf._estimate_tokens(sample_text) == 100
+
+    # 3. Test token budget ceiling in synthesis
+    # Create 30 sources with large summaries that would exceed 15,000 tokens
+    large_sources = [
+        SearchResult(
+            title=f"Paxos Consensus Variant {i}",
+            url=f"https://consensus-{i}.org/paper",
+            summary="A" * 4000,  # ~1,000 tokens each -> 30 sources = 30,000 tokens
+            iteration=1,
+            query="paxos consensus",
+        )
+        for i in range(30)
+    ]
+    wf.search_results = large_sources
+
+    captured_input = None
+
+    async def mock_runner_run(agent, input):
+        nonlocal captured_input
+        captured_input = input
+        class MockResult:
+            final_output = "Report output"
+        return MockResult()
+
+    with patch("agents.Runner.run", side_effect=mock_runner_run):
+        await wf.synthesis_report()
+
+    assert captured_input is not None
+    # Estimated tokens of captured input should not explode past safety budget
+    assert len(captured_input) < 70000
+
+    # 4. Test follow-up findings filtering
+    triage_failed = SearchResult(
+        title="Bad Page",
+        url="https://bad.org/page",
+        summary="Source does not contain substantive findings on the topic.",
+        iteration=1,
+        query="bad query",
+    )
+    good_page = SearchResult(
+        title="Good Page",
+        url="https://good.org/page",
+        summary="Detailed consensus algorithms and benchmark metrics across multi-datacenter clusters.",
+        iteration=1,
+        query="good query",
+    )
+    wf.search_results = [triage_failed, good_page]
+    captured_followup_input = None
+
+    async def mock_followup_run(agent, input):
+        nonlocal captured_followup_input
+        captured_followup_input = input
+        from app.agents.follow_up_agent import FollowUpDecisionResponse
+        class MockResult:
+            final_output = FollowUpDecisionResponse(
+                should_follow_up=False,
+                reasoning="Sufficient research completed.",
+                queries=[],
+            )
+        return MockResult()
+
+    with patch("agents.Runner.run", side_effect=mock_followup_run):
+        await wf.generate_followup()
+
+    assert captured_followup_input is not None
+    assert "Bad Page" not in captured_followup_input
+    assert "Good Page" in captured_followup_input
+
+
 if __name__ == "__main__":
     test_agents()
     test_research_workflow_config_and_cleaning()
     asyncio.run(test_url_normalization_and_representative_selection())
+    asyncio.run(test_cascading_filtering_and_token_budgeting())
     test_prompt_loader()
 
