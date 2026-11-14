@@ -487,8 +487,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
               })}
             </span>
             <span className="text-[11px] text-zinc-500 font-mono">
-              • {job.depth} {job.depth === 1 ? "round" : "rounds"} •{" "}
-              {job.breadth} sources/query
+              • Depth {job.depth} • {job.breadth} sources/query
             </span>
           </div>
 

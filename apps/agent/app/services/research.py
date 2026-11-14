@@ -367,11 +367,10 @@ class ResearchWorkflow:
         # If too few valid sources survived filtering, use all available search results
         sources_to_synthesize = valid_results if valid_results else self.search_results
 
-        # Cap the number of synthesized sources to prevent context saturation
-        # Quick (depth 1): up to 12 sources
-        # Medium (depth 2): up to 20 sources
-        # Deep (depth 3-5): up to 35 sources
-        max_synthesis_sources = min(len(sources_to_synthesize), max(10, self.depth * 7))
+        # Prioritize and include all substantive deduplicated sources gathered across the research workflow.
+        # Enforce a safety ceiling (up to 50 sources or ~15k tokens) to prevent attention dilution
+        # and context overflow only when large search runs accumulate massive evidence volumes.
+        max_synthesis_sources = min(len(sources_to_synthesize), 50)
 
         if len(sources_to_synthesize) <= max_synthesis_sources:
             selected_sources = list(sources_to_synthesize)
@@ -430,11 +429,10 @@ class ResearchWorkflow:
         await self._log(
             {"type": "status", "message": "Evaluating if more research is needed..."}
         )
-        # Give follow-up agent progress context: iteration vs target depth
-        recent_results = self.search_results[-20:]
-        recent_findings_text = "\n".join(
+        # Provide full accumulated research evidence to the follow-up auditor for complete cross-round gap analysis
+        findings_block = "\n".join(
             f"{i}. Title: {result.title}\n   URL: {result.url}\n   Summary: {result.summary}"
-            for i, result in enumerate(recent_results, 1)
+            for i, result in enumerate(self.search_results, 1)
         )
         findings_text = render_user_prompt(
             "follow_up.md",
@@ -443,7 +441,7 @@ class ResearchWorkflow:
                 "iteration": self.iteration,
                 "depth": self.depth,
                 "total_sources": len(self.search_results),
-                "recent_findings": recent_findings_text,
+                "recent_findings": findings_block,
             },
         )
 

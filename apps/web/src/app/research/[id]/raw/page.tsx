@@ -164,7 +164,7 @@ export default function ResearchRawPage({ params }: RawPageProps) {
             <span>~{readTime} min read</span>
             <span>•</span>
             <span>
-              {job.depth} research {job.depth === 1 ? "round" : "rounds"}
+              Depth {job.depth}
             </span>
           </div>
         </div>
