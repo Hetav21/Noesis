@@ -103,12 +103,6 @@ class ResearchWorkflow:
         return result.final_output
 
     def _sync_ddgs_search(self, query: str):
-        results = DDGS().text(
-            query,
-            region="in-en",
-            safesearch="moderate",
-            max_results=self.max_results_per_query * 3,
-        )
         blocked_domains = [
             "baidu.com",
             "zhihu.com",
@@ -121,6 +115,39 @@ class ResearchWorkflow:
             "forum.wordreference.com",
         ]
         blocked_tlds = [".cn", ".jp", ".kr", ".ru"]
+
+        # Backends to try:
+        # 1. None: ddgs default (backend="auto") queries all underlying search engines
+        #    in parallel (duckduckgo, brave, startpage, mojeek, yahoo, wikipedia, grokipedia)
+        #    and aggregates results from whichever succeed.
+        # 2. "yahoo": targeted fallback if the multi-engine 'auto' pool throws a transient
+        #    bot/rate-limit error (e.g. from cloud datacenter IP ranges).
+        backends_to_try: list[str | None] = [None, "yahoo"]
+        results: list[dict[str, Any]] = []
+        last_err: Exception | None = None
+
+        for backend in backends_to_try:
+            for attempt in range(2):
+                try:
+                    kwargs: dict[str, Any] = {
+                        "max_results": self.max_results_per_query * 3,
+                    }
+                    if backend:
+                        kwargs["backend"] = backend
+
+                    res = DDGS().text(query, **kwargs)
+                    if res:
+                        results = list(res)
+                        break
+                except Exception as e:  # noqa: BLE001
+                    last_err = e
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+            if results:
+                break
+
+        if not results and last_err:
+            raise last_err
 
         filtered_results = []
         for r in results:

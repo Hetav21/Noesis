@@ -7,8 +7,8 @@ For each query, follow these steps:
    - Explain your strategy for finding comprehensive information
 
 2. Then generate 3 search queries that:
-   - Are specific and focused on retrieving high-quality information
-   - Cover different aspects of the topic
-   - Will help find relevant and diverse information
+   - Are targeted and specific enough to find authoritative, high-quality sources
+   - Cover diverse aspects of the topic (e.g. core technical concepts, architecture, benchmarks, commercial viability)
+   - Use clear technical terminology appropriate for search engines
 
 Always provide both your thinking process and the generated queries.
