@@ -1,5 +1,6 @@
 import asyncio
 import time
+import urllib.parse
 from collections.abc import Callable
 from typing import Any
 
@@ -21,6 +22,7 @@ class SearchResult(BaseModel):
     title: str
     url: str
     summary: str
+    iteration: int = 1
 
 
 class ResearchWorkflow:
@@ -108,6 +110,21 @@ class ResearchWorkflow:
             await self._log({"type": "list_item", "message": f"{i}. {query}"})
 
         return result.final_output
+
+    @staticmethod
+    def _normalize_url(url: str) -> str:
+        """Normalize URL for deduplication by lowercasing scheme and netloc while preserving path and query case."""
+        try:
+            parts = urllib.parse.urlsplit(url.strip())
+            return urllib.parse.urlunsplit((
+                parts.scheme.lower(),
+                parts.netloc.lower(),
+                parts.path,
+                parts.query,
+                parts.fragment,
+            ))
+        except Exception:
+            return url.strip()
 
     def _clean_search_query(self, query: str) -> str:
         """Strip conversational questions and stop-word prefixes for search engine relevance."""
@@ -207,14 +224,17 @@ class ResearchWorkflow:
         seen_urls = set()
         for r in results:
             raw_url = r.get("href", "")
-            url_lower = raw_url.lower()
-            if not raw_url or url_lower in seen_urls:
+            if not raw_url:
                 continue
+            normalized_url = self._normalize_url(raw_url)
+            if normalized_url in seen_urls:
+                continue
+            url_lower = raw_url.lower()
             if any(domain in url_lower for domain in blocked_domains):
                 continue
             if any(url_lower.endswith(tld) or f"{tld}/" in url_lower for tld in blocked_tlds):
                 continue
-            seen_urls.add(url_lower)
+            seen_urls.add(normalized_url)
             filtered_results.append(r)
             if len(filtered_results) >= self.max_results_per_query:
                 break
@@ -274,6 +294,7 @@ class ResearchWorkflow:
                     title=result["title"],
                     url=result["href"],
                     summary=agent_result.final_output,
+                    iteration=self.iteration,
                 )
 
                 self.search_results.append(search_result)
@@ -308,13 +329,13 @@ class ResearchWorkflow:
         valid_results: list[SearchResult] = []
         seen_urls = set()
         for res in self.search_results:
-            clean_url = res.url.strip().lower()
+            clean_url = self._normalize_url(res.url)
             if clean_url in seen_urls:
                 continue
-            seen_urls.add(clean_url)
             # Filter out error messages or completely empty summaries
             if len(res.summary.strip()) < 30 or "failed to scrape content" in res.summary.lower():
                 continue
+            seen_urls.add(clean_url)
             valid_results.append(res)
 
         # If too few valid sources survived filtering, use all available search results
@@ -325,7 +346,21 @@ class ResearchWorkflow:
         # Medium (depth 2): up to 20 sources
         # Deep (depth 3-5): up to 35 sources
         max_synthesis_sources = min(len(sources_to_synthesize), max(10, self.depth * 7))
-        selected_sources = sources_to_synthesize[:max_synthesis_sources]
+
+        if len(sources_to_synthesize) <= max_synthesis_sources:
+            selected_sources = list(sources_to_synthesize)
+        else:
+            # Group sources by iteration to ensure representative selection across rounds
+            by_iteration: dict[int, list[SearchResult]] = {}
+            for item in sources_to_synthesize:
+                by_iteration.setdefault(item.iteration, []).append(item)
+
+            selected_sources: list[SearchResult] = []
+            iter_queues = [list(q) for q in by_iteration.values()]
+            while len(selected_sources) < max_synthesis_sources and any(iter_queues):
+                for q in iter_queues:
+                    if q and len(selected_sources) < max_synthesis_sources:
+                        selected_sources.append(q.pop(0))
 
         scope_desc = (
             "Quick Overview (Target: 4-5 focused sections, key findings, and direct answers)"
